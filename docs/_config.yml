@@ -1,7 +1,7 @@
 title: StreamONER
-description: >-
-  StreamONER is a desktop application for live streamers.
-  It displays Discord voice-chat members, YouTube live chat, and avatar overlays
-  in OBS browser sources. YouTube access uses read-only Google OAuth
-  (youtube.readonly) to detect live broadcasts and show chat.
 lang: ja
+url: "https://streamoner.mutti.xyz"
+description: >-
+  StreamONER は配信者向けデスクトップアプリです。
+  Discord の VC 表示、YouTube ライブチャット、アバターオーバーレイを OBS のブラウザソースに表示します。
+  YouTube 連携は読み取り専用 OAuth（youtube.readonly）で、配信検出とチャット表示にのみ使用します。

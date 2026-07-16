@@ -5,14 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StreamONER</title>
   <meta name="application-name" content="StreamONER">
-  <meta name="description" content="StreamONER is a desktop application for live streamers. It displays Discord voice-chat members, YouTube live chat, and avatar overlays in OBS browser sources.">
+  <meta name="description" content="StreamONER は配信者向けデスクトップアプリです。Discord の VC 表示、YouTube ライブチャット、アバターオーバーレイを OBS に表示し、読み取り専用の YouTube OAuth で配信検出とチャット表示を行います。">
+  <meta property="og:locale" content="ja_JP">
   <meta property="og:title" content="StreamONER">
   <meta property="og:site_name" content="StreamONER">
-  <meta property="og:description" content="Desktop app for live streamers: Discord VC, YouTube live chat, and avatar overlays for OBS.">
+  <meta property="og:description" content="配信者向けデスクトップアプリ。Discord VC・YouTube ライブチャット・アバターを OBS オーバーレイとして表示します。">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://streamoner.mutti.xyz/">
+  <link rel="canonical" href="https://streamoner.mutti.xyz/">
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; color: #111; }
+    body { font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height: 1.7; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; color: #111; }
     h1 { font-size: 2rem; margin-bottom: 0.25rem; }
     h2 { margin-top: 2rem; font-size: 1.25rem; }
     .lede { font-size: 1.05rem; }
@@ -22,54 +24,66 @@
 <body>
   <header>
     <h1>StreamONER</h1>
-    <p><strong>App name: StreamONER</strong></p>
+    <p><strong>アプリ名: StreamONER</strong></p>
   </header>
 
   <main>
     <section>
-      <h2>App purpose</h2>
+      <h2>StreamONER とは</h2>
       <p class="lede">
-        StreamONER is a desktop application for live streamers.
-        It helps creators display on-air overlays in OBS.
+        StreamONER は、配信者向けのデスクトップアプリケーションです。
+        OBS で使う配信オーバーレイの表示と操作を助けることが目的です。
       </p>
+    </section>
+
+    <section>
+      <h2>アプリの目的と機能</h2>
+      <p>StreamONER は、次のユーザー向け機能を提供します。</p>
       <ul>
-        <li>Discord voice-channel members and speaking highlights</li>
-        <li>YouTube live chat on stream</li>
-        <li>Avatar / mouth-sync overlays driven by microphone input</li>
+        <li>Discord のボイスチャンネル参加者表示と発話ハイライトを、OBS のブラウザソースに表示する</li>
+        <li>YouTube ライブチャットを、配信中に OBS のブラウザソースへ表示する</li>
+        <li>マイク入力に連動するアバター（口パク）オーバーレイを表示する</li>
+        <li>これらのオーバーレイを配信制作のワークフローに合わせてまとめて使う</li>
       </ul>
-      <p>
-        These features are combined into OBS browser sources for live production.
-      </p>
-      <p>
-        日本語: StreamONER は配信者向けデスクトップアプリです。Discord の VC 表示、YouTube ライブチャット、アバター（マイク連動の口パク）を OBS のブラウザソースにまとめて表示します。
-      </p>
+      <p>対応環境: Windows / macOS 向けデスクトップアプリ（配布インストーラは主に Windows x64）。</p>
     </section>
 
     <section>
-      <h2>YouTube / Google OAuth purpose</h2>
+      <h2>Google / YouTube データが必要な理由</h2>
       <p>
-        When a user connects Google, StreamONER uses the read-only scope
+        StreamONER は、ユーザーが許可した場合に限り、Google の認可を使って
+        YouTube データへ<strong>読み取り専用</strong>でアクセスします。
+        利用スコープは
         <code>https://www.googleapis.com/auth/youtube.readonly</code>
-        only to:
+        のみです。
       </p>
+      <p>この権限は、次の目的にだけ使います。</p>
       <ol>
-        <li>Detect the user's active YouTube live broadcast</li>
-        <li>Read live chat messages for on-screen display in OBS</li>
+        <li>認可したユーザーの、配信中の YouTube ライブを検出する</li>
+        <li>ライブチャットを読み取り、StreamONER / OBS 上に表示する</li>
       </ol>
-      <p>StreamONER does not collect Google passwords.</p>
+      <p>
+        StreamONER は Google のパスワードを取得しません。
+        認証は Google の同意画面上で行われます。
+      </p>
     </section>
 
     <section>
-      <h2>Platform</h2>
-      <p>Windows / macOS desktop app (installer primarily for Windows x64).</p>
+      <h2>プライバシーポリシー</h2>
+      <p>
+        Google / YouTube データの取り扱いについては、
+        <a href="https://streamoner.mutti.xyz/privacy.html">プライバシーポリシー</a>
+        を参照してください。
+        この URL は、OAuth 同意画面に登録しているプライバシーポリシーと同じです。
+      </p>
     </section>
 
     <section>
-      <h2>Links</h2>
+      <h2>お問い合わせ</h2>
       <ul>
-        <li><a href="./privacy.html">Privacy Policy / プライバシーポリシー</a></li>
-        <li>Operator: romu</li>
-        <li>Contact: <a href="mailto:contact@mutti.xyz">contact@mutti.xyz</a></li>
+        <li>運営: romu</li>
+        <li>メール: <a href="mailto:contact@mutti.xyz">contact@mutti.xyz</a></li>
+        <li>ホームページ: <a href="https://streamoner.mutti.xyz/">https://streamoner.mutti.xyz/</a></li>
       </ul>
     </section>
   </main>
