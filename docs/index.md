@@ -1,26 +1,42 @@
+---
+title: StreamONER
+---
+
 # StreamONER
 
-配信向けデスクトップアプリです。Discord の VC 表示、YouTube ライブチャット、アバター（PNG レイヤー口パク）を、OBS のブラウザソースにまとめて表示できます。
+**App name: StreamONER**
 
-## 主な機能
+StreamONER is a desktop application for live streamers.
 
-- **Discord** — 参加中 VC のメンバー表示・発話ハイライト
-- **YouTube** — ライブ配信の検出とライブチャットの取得・OBS 表示（Google アカウント連携は読み取り専用）
-- **アバター** — マイク連動の口パクなど、配信向けオーバーレイ
+## App purpose
 
-対象 OS: Windows / macOS（配布インストーラは主に Windows x64）
+StreamONER helps streamers show on-air overlays in OBS:
 
-## Google / YouTube 連携について
+- Discord voice-channel members and speaking highlights
+- YouTube live chat on stream
+- Avatar / mouth-sync overlays driven by microphone input
 
-StreamONER は、ユーザーの許可のもと Google OAuth（スコープ `youtube.readonly`）を使い、次の目的でのみ YouTube データにアクセスします。
+These features are combined into OBS browser sources for live production.
 
-- 配信中のライブを検出する
-- ライブチャットを取得し、OBS 等に表示する
+日本語での説明: StreamONER は配信者向けデスクトップアプリです。Discord の VC 表示、YouTube ライブチャット、アバター（マイク連動の口パク）を OBS のブラウザソースにまとめて表示します。
 
-パスワードは取得しません。詳細は[プライバシーポリシー](./privacy.html)を参照してください。
+## YouTube / Google OAuth purpose
 
-## リンク
+When a user connects Google, StreamONER uses the read-only scope
+`https://www.googleapis.com/auth/youtube.readonly` only to:
 
-- [プライバシーポリシー](./privacy.html)
-- 運営: romu
-- 連絡先: [contact@mutti.xyz](mailto:contact@mutti.xyz)
+1. Detect the user's active YouTube live broadcast
+2. Read live chat messages for on-screen display in OBS
+
+StreamONER does not collect Google passwords. Details are in the
+[Privacy Policy](./privacy.html).
+
+## Platform
+
+Windows / macOS desktop app (installer primarily for Windows x64).
+
+## Links
+
+- [Privacy Policy](./privacy.html)
+- Operator: romu
+- Contact: [contact@mutti.xyz](mailto:contact@mutti.xyz)
