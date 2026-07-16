@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StreamONER</title>
+  <meta name="application-name" content="StreamONER">
+  <meta name="description" content="StreamONER is a desktop application for live streamers. It displays Discord voice-chat members, YouTube live chat, and avatar overlays in OBS browser sources.">
+  <meta property="og:title" content="StreamONER">
+  <meta property="og:site_name" content="StreamONER">
+  <meta property="og:description" content="Desktop app for live streamers: Discord VC, YouTube live chat, and avatar overlays for OBS.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://streamoner.mutti.xyz/">
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; color: #111; }
+    h1 { font-size: 2rem; margin-bottom: 0.25rem; }
+    h2 { margin-top: 2rem; font-size: 1.25rem; }
+    .lede { font-size: 1.05rem; }
+    a { color: #0b57d0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>StreamONER</h1>
+    <p><strong>App name: StreamONER</strong></p>
+  </header>
+
+  <main>
+    <section>
+      <h2>App purpose</h2>
+      <p class="lede">
+        StreamONER is a desktop application for live streamers.
+        It helps creators display on-air overlays in OBS.
+      </p>
+      <ul>
+        <li>Discord voice-channel members and speaking highlights</li>
+        <li>YouTube live chat on stream</li>
+        <li>Avatar / mouth-sync overlays driven by microphone input</li>
+      </ul>
+      <p>
+        These features are combined into OBS browser sources for live production.
+      </p>
+      <p>
+        日本語: StreamONER は配信者向けデスクトップアプリです。Discord の VC 表示、YouTube ライブチャット、アバター（マイク連動の口パク）を OBS のブラウザソースにまとめて表示します。
+      </p>
+    </section>
+
+    <section>
+      <h2>YouTube / Google OAuth purpose</h2>
+      <p>
+        When a user connects Google, StreamONER uses the read-only scope
+        <code>https://www.googleapis.com/auth/youtube.readonly</code>
+        only to:
+      </p>
+      <ol>
+        <li>Detect the user's active YouTube live broadcast</li>
+        <li>Read live chat messages for on-screen display in OBS</li>
+      </ol>
+      <p>StreamONER does not collect Google passwords.</p>
+    </section>
+
+    <section>
+      <h2>Platform</h2>
+      <p>Windows / macOS desktop app (installer primarily for Windows x64).</p>
+    </section>
+
+    <section>
+      <h2>Links</h2>
+      <ul>
+        <li><a href="./privacy.html">Privacy Policy / プライバシーポリシー</a></li>
+        <li>Operator: romu</li>
+        <li>Contact: <a href="mailto:contact@mutti.xyz">contact@mutti.xyz</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
