@@ -1,111 +1,114 @@
-# StreamONER プライバシーポリシー
+# StreamONER Privacy Policy
 
-**最終更新日:** 2026-07-16  
-**運営:** romu  
-**連絡先:** [contact@mutti.xyz](mailto:contact@mutti.xyz)  
-**本アプリ:** StreamONER（Windows / macOS 向けデスクトップアプリ）  
-**ホームページ:** [https://streamoner.mutti.xyz/](https://streamoner.mutti.xyz/)
+**Last updated:** 2026-07-16  
+**Operator:** romu  
+**Contact:** [contact@mutti.xyz](mailto:contact@mutti.xyz)  
+**Application:** StreamONER (desktop app for Windows / macOS)  
+**Homepage:** [https://streamoner.mutti.xyz/](https://streamoner.mutti.xyz/)
 
-本ポリシーは、本アプリが取り扱う情報の種類、利用目的、保管・削除、および第三者への提供について説明します。
+This Privacy Policy explains what information StreamONER (“the App”) accesses, how it is used, where it is stored, and how it may be shared.
 
-## 1. 収集・アクセスする情報
+## 1. Information we collect or access
 
-### 1.1 Google / YouTube 連携（OAuth）
+### 1.1 Google / YouTube OAuth
 
-ユーザーが Google アカウント連携を許可した場合、本アプリは次の目的で YouTube データにアクセスします。
+If you authorize Google account linking, the App accesses YouTube data for the following purposes:
 
-| 内容 | 目的 |
+| Data | Purpose |
 | --- | --- |
-| YouTube アカウントに紐づく配信情報 | 配信中のライブを検出し、チャット取得を開始するため |
-| ライブチャット関連データ（コメント本文・表示名・スーパーチャット等の表示用情報を含む） | OBS 等へのコメント表示のため |
-| チャンネル識別に必要な最小限のメタデータ | 連携状態の表示のため |
+| Broadcast / live stream information linked to your YouTube account | Detect an active live stream and start chat retrieval |
+| Live chat data (including message text, display names, and Super Chat display info) | Show chat in OBS and related overlays |
+| Minimal channel metadata needed for identification | Show connection status in the App |
 
-利用する権限（スコープ）は次のとおりです。
+Scope used:
 
-- `https://www.googleapis.com/auth/youtube.readonly`（YouTube データの表示・読み取り）
+- `https://www.googleapis.com/auth/youtube.readonly` (view / read YouTube data)
 
-本アプリは、ユーザーの Google パスワードを取得・保存しません。認証は Google の画面上で行われます。
+The App does not collect or store your Google password. Authentication happens on Google’s screens.
 
-ライブチャットには、視聴者（第三者）の表示名・コメント等が含まれる場合があります。これらは、配信者であるユーザーが本アプリ上でコメントを表示するために、ユーザーの端末上で処理・表示されます。
+Live chat may include display names and comments from viewers (third parties). These are processed and displayed on your device so you (the streamer) can show comments in the App / OBS.
 
-### 1.2 端末に保存する情報
+### 1.2 Information stored on your device
 
-本アプリは、主にユーザーの端末上に次の情報を保存します。
+The App mainly stores the following on your device:
 
-- OAuth のアクセストークンおよびリフレッシュトークン（連携維持用）
-- アプリ設定（表示レイアウト、マイク設定、テーマ等）
-- ユーザーが任意で入力した API キーや Discord 用シークレット等
+- OAuth access tokens and refresh tokens (to keep the connection)
+- App settings (layout, microphone settings, theme, etc.)
+- Optional API keys or Discord secrets that you enter yourself
 
-トークンやシークレット類は、OS が提供する暗号化ストレージに保存します。
+Tokens and secrets are stored using OS-provided encrypted storage.
 
-### 1.3 データの送信先
+### 1.3 Where data is sent
 
-- Google / YouTube 連携時、本アプリはユーザーの端末から Google のサーバー（OAuth および YouTube Data API）へ必要なリクエストを送信します。
-- 取得した YouTube 関連データおよび OAuth トークンを、運営者の独自サーバーへ送信・アップロードする仕組みはありません（本ポリシー最終更新時点）。
-- チャット表示のため、ユーザーが設定した OBS 等のローカル環境、またはユーザーが有効にした同一 LAN 上のリモート操作画面へ、表示用データを送る場合があります。対象はユーザーの PC および同一 LAN 内に限ります。
+- During Google / YouTube linking, the App sends necessary requests from your device to Google’s servers (OAuth and YouTube Data API).
+- As of the last update of this policy, there is no product mechanism that uploads retrieved YouTube data or OAuth tokens to the operator’s own servers.
+- For chat display, display data may be sent to OBS (or similar) on your local machine, or to a remote control UI on the same LAN if you enable it. This stays on your PC / local network.
 
-## 2. 利用目的
+## 2. Purpose of use
 
-取得した情報は、次の目的にのみ使用します。
+We use the information only to:
 
-1. YouTube ライブの検出とライブチャットの取得・表示
-2. 連携状態の維持および再接続
-3. ユーザーが明示的に行った操作（連携解除、設定変更、バックアップ等）の実行
+1. Detect YouTube lives and retrieve / display live chat
+2. Maintain and restore the linked connection
+3. Carry out actions you explicitly request (unlink, change settings, backup, etc.)
 
-Google API から取得したデータは、上記のユーザー向け機能の提供以外の目的には使用しません。
+Google user data obtained via Google APIs is not used for purposes other than providing these user-facing features.
 
-## 3. Google API Services User Data Policy（Limited Use）
+## 3. Google API Services User Data Policy (Limited Use)
 
-本アプリによる Google ユーザーデータの利用および転送は、[Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy)（Limited Use 要件を含む）に従います。
+StreamONER’s use and transfer of Google user data complies with the
+[Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy),
+including the Limited Use requirements.
 
-本アプリは、次の行為を行いません。
+The App does **not**:
 
-- Google ユーザーデータの、広告プラットフォーム・データブローカー・情報再販業者等への販売または譲渡
-- Google ユーザーデータの、広告配信・再ターゲティング・パーソナライズド広告・インタレストベース広告への利用
-- Google ユーザーデータの、与信判断または貸付目的での利用
-- 広告目的のトラッキング、および本アプリの利用状況を外部解析サービスへ送ること（製品として意図した送信は行いません）
-- YouTube 以外の Google サービスへの不正なアクセス
+- Sell or transfer Google user data to advertising platforms, data brokers, or information resellers
+- Use Google user data for advertising, retargeting, personalized ads, or interest-based ads
+- Use Google user data for creditworthiness or lending decisions
+- Perform advertising tracking, or intentionally send App usage analytics to third-party analytics services
+- Access Google services other than YouTube without authorization
 
-## 4. 第三者提供
+## 4. Sharing with third parties
 
-法令に基づく場合、またはセキュリティ上必要な場合を除き、取得した YouTube 関連データや OAuth トークンを第三者に提供しません。
+Except where required by law or necessary for security, we do not share retrieved YouTube data or OAuth tokens with third parties.
 
-第 1.3 節に記載のとおり、チャット表示のため OBS 等または同一 LAN 上のリモート操作画面へデータを送る場合があります。これはユーザーの設定および操作に基づくものです。
+As described in section 1.3, display data may be sent to OBS or a same-LAN remote UI based on your settings and actions.
 
-## 5. 人による閲覧
+## 5. Human access
 
-運営者およびその関係者は、通常の運用において、ユーザーの Google ユーザーデータ（チャット内容・トークン等）を閲覧しません。
+The operator and related parties do not read your Google user data (chat content, tokens, etc.) in normal operations.
 
-次の場合に限り、必要最小限の範囲で取り扱うことがあります。
+We may handle the minimum necessary data only when:
 
-- ユーザーがサポート対応のため明示的に同意し、必要な情報を提供した場合
-- セキュリティ上の調査（不正利用や障害の調査等）に必要な場合
-- 法令に基づく場合
+- You explicitly agree for support and provide the needed information
+- A security investigation (abuse, incidents, etc.) requires it
+- Required by law
 
-## 6. 保管期間と削除
+## 6. Retention and deletion
 
-- OAuth トークンは、連携中のみ端末に保持します。
-- 本アプリ内で YouTube 連携を解除した場合、保存済みの YouTube OAuth トークンは削除します。
-- ライブチャットの表示用データは、表示や履歴機能のために端末上に保持される場合があります。連携解除またはアプリデータの削除により除去できます。
-- アプリのアンインストール後も、OS やユーザーデータ領域にファイルが残ることがあります。完全に削除する場合は、アプリのデータディレクトリの削除など、OS の手順に従ってください。
-- Google アカウント側でも、[Google アカウントのアプリのアクセス権](https://myaccount.google.com/permissions) から本アプリのアクセスを取り消せます。
+- OAuth tokens are kept on the device only while linked.
+- If you unlink YouTube in the App, stored YouTube OAuth tokens are deleted.
+- Live chat display data may remain on the device for display / history features. It can be removed by unlinking or deleting App data.
+- After uninstall, files may remain in OS / user data areas. Follow OS procedures (e.g. delete the App data directory) for full removal.
+- You can also revoke access in
+  [Google Account → Third-party access](https://myaccount.google.com/permissions).
 
-## 7. セキュリティ
+## 7. Security
 
-トークンや秘密情報は暗号化可能な形で端末に保存し、ソースコードや設定のエクスポートに含めないよう設計しています。ただし、端末の不正利用やマルウェア等によるリスクを完全に排除することはできません。
+Tokens and secrets are designed to be stored in an encryptable form on device and excluded from source code and settings exports. We cannot completely eliminate risks from device compromise or malware.
 
-## 8. 子どもの利用
+## 8. Children’s privacy
 
-本アプリは主に配信者向けのツールです。13 歳未満の子どもから、保護者の同意なく個人情報を意図的に収集することはありません。
+StreamONER is primarily a tool for streamers. We do not knowingly collect personal information from children under 13 without parental consent.
 
-## 9. ポリシーの変更
+## 9. Changes to this policy
 
-本ポリシーの内容を変更する場合は、本ページの「最終更新日」を更新して掲載します。重要な変更がある場合は、合理的な方法で周知します。
+If we change this policy, we will update the “Last updated” date on this page. For material changes, we will provide notice in a reasonable manner.
 
-## 10. お問い合わせ
+## 10. Contact
 
-本ポリシーに関するお問い合わせは、次の連絡先までご連絡ください。
+For questions about this Privacy Policy:
 
-- メール: [contact@mutti.xyz](mailto:contact@mutti.xyz)
-- 運営: romu
-- ホームページ: [https://streamoner.mutti.xyz/](https://streamoner.mutti.xyz/)
+- Email: [contact@mutti.xyz](mailto:contact@mutti.xyz)
+- Operator: romu
+- Homepage: [https://streamoner.mutti.xyz/](https://streamoner.mutti.xyz/)
