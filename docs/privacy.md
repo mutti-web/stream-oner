@@ -4,7 +4,7 @@
 **運営:** romu  
 **連絡先:** [contact@mutti.xyz](mailto:contact@mutti.xyz)  
 **本アプリ:** StreamONER（Windows / macOS 向けデスクトップアプリ）  
-**ホームページ:** [https://mutti-web.github.io/stream-oner/](https://mutti-web.github.io/stream-oner/)
+**ホームページ:** [https://streamoner.mutti.xyz/](https://streamoner.mutti.xyz/)
 
 本ポリシーは、本アプリが取り扱う情報の種類、利用目的、保管・削除、および第三者への提供について説明します。
 
@@ -108,4 +108,4 @@ Google API から取得したデータは、上記のユーザー向け機能の
 
 - メール: [contact@mutti.xyz](mailto:contact@mutti.xyz)
 - 運営: romu
-- ホームページ: [https://mutti-web.github.io/stream-oner/](https://mutti-web.github.io/stream-oner/)
+- ホームページ: [https://streamoner.mutti.xyz/](https://streamoner.mutti.xyz/)
