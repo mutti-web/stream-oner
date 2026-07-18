@@ -4,4 +4,4 @@ url: "https://streamoner.mutti.xyz"
 description: >-
   StreamONER は配信者向けデスクトップアプリです。
   Discord の VC 表示、YouTube ライブチャット、アバターオーバーレイを OBS のブラウザソースに表示します。
-  YouTube 連携は読み取り専用 OAuth（youtube.readonly）で、配信検出とチャット表示にのみ使用します。
+  Google OAuth は読み取り専用（youtube.readonly）で、YouTube チャンネルの確認と配信中のライブ検出にのみ使用します。

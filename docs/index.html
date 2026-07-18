@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>StreamONER</title>
   <meta name="application-name" content="StreamONER">
-  <meta name="description" content="StreamONER は配信者向けデスクトップアプリです。Discord の VC 表示、YouTube ライブチャット、アバターオーバーレイを OBS に表示し、読み取り専用の YouTube OAuth で配信検出とチャット表示を行います。">
+  <meta name="description" content="StreamONER は配信者向けデスクトップアプリです。Discord の VC 表示、YouTube ライブチャット、アバターオーバーレイを OBS に表示します。Google OAuth は、YouTube チャンネルの確認と配信中のライブ検出にのみ使用します。">
   <meta property="og:locale" content="ja_JP">
   <meta property="og:title" content="StreamONER">
   <meta property="og:site_name" content="StreamONER">
@@ -49,19 +49,24 @@
     </section>
 
     <section>
-      <h2>Google / YouTube データが必要な理由</h2>
+      <h2>Google / YouTube アカウント連携が必要な理由</h2>
       <p>
         StreamONER は、ユーザーが許可した場合に限り、Google の認可を使って
-        YouTube データへ<strong>読み取り専用</strong>でアクセスします。
+        認可したユーザー自身の YouTube データへ<strong>読み取り専用</strong>でアクセスします。
         利用スコープは
         <code>https://www.googleapis.com/auth/youtube.readonly</code>
         のみです。
       </p>
       <p>この権限は、次の目的にだけ使います。</p>
       <ol>
-        <li>認可したユーザーの、配信中の YouTube ライブを検出する</li>
-        <li>ライブチャットを読み取り、StreamONER / OBS 上に表示する</li>
+        <li>認可したユーザーの YouTube チャンネルを確認し、連携状態を表示する</li>
+        <li>そのユーザーが配信中の YouTube ライブを検出し、対象の動画 ID を取得する</li>
       </ol>
+      <p>
+        ライブチャット表示は別のユーザー向け機能であり、
+        Google OAuth のアクセストークンおよびリフレッシュトークンを
+        チャットメッセージの取得には使用しません。
+      </p>
       <p>
         StreamONER は Google のパスワードを取得しません。
         認証は Google の同意画面上で行われます。
