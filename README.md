@@ -331,4 +331,5 @@ Client Secret、YouTube API キー、YouTube / Discord OAuth トークンは OS 
 
 ## ライセンス
 
-[MIT License](./LICENSE)
+- 本ソフトウェア: [MIT License](./LICENSE)
+- 第三者コンポーネント: [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)
