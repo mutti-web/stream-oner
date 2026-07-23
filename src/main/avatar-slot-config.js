@@ -150,6 +150,10 @@ function defaultSlot() {
     sensitivity: 1.5,
     lookAtEnabled: false,
     pupilOffsetMax: 4,
+    /** human: 部位パララックス / integrated: 一体感寄り（差を抑える） */
+    rigType: 'human',
+    /** 髪スプリングの強さ（0=追従のみ, 1=よく揺れる）。Pixi 経路で使用 */
+    hairSpringStrength: 0.55,
     customLayers: [],
     flipX: false,
     flipY: false,
@@ -383,6 +387,8 @@ function slotToOverlay(slotId, slot, baseUrl, existsFn) {
     slotOffsetY: Number(normalized.slotOffsetY) || 0,
     lookAtEnabled: !!normalized.lookAtEnabled,
     pupilOffsetMax: Math.max(1, Math.min(16, Number(normalized.pupilOffsetMax) || 4)),
+    rigType: normalized.rigType === 'integrated' ? 'integrated' : 'human',
+    hairSpringStrength: Math.max(0, Math.min(1, Number(normalized.hairSpringStrength) ?? 0.55)),
     customLayers: normalizeCustomLayers(normalized.customLayers),
     layers: normalized.layers,
     /** パスが保存されていてもファイルが無い場合はレイヤーモードにしない */
@@ -424,6 +430,12 @@ function slotFromFormPayload(prefix, data) {
   if (data[`${prefix}_lookAtEnabled`] !== undefined) slot.lookAtEnabled = !!data[`${prefix}_lookAtEnabled`];
   if (data[`${prefix}_pupilOffsetMax`] !== undefined) {
     slot.pupilOffsetMax = Math.max(1, Math.min(16, Number(data[`${prefix}_pupilOffsetMax`]) || 4));
+  }
+  if (data[`${prefix}_rigType`] !== undefined) {
+    slot.rigType = String(data[`${prefix}_rigType`]) === 'integrated' ? 'integrated' : 'human';
+  }
+  if (data[`${prefix}_hairSpringStrength`] !== undefined && data[`${prefix}_hairSpringStrength`] !== '') {
+    slot.hairSpringStrength = Math.max(0, Math.min(1, Number(data[`${prefix}_hairSpringStrength`]) || 0));
   }
   if (data[`${prefix}_custom_layers_json`] !== undefined) {
     try {
@@ -504,6 +516,8 @@ function slotToFormFlat(prefix, slot) {
   flat[`${prefix}_slot_oy`] = normalized.slotOffsetYPct;
   flat[`${prefix}_lookAtEnabled`] = !!normalized.lookAtEnabled;
   flat[`${prefix}_pupilOffsetMax`] = Number(normalized.pupilOffsetMax) || 4;
+  flat[`${prefix}_rigType`] = normalized.rigType === 'integrated' ? 'integrated' : 'human';
+  flat[`${prefix}_hairSpringStrength`] = Number(normalized.hairSpringStrength) ?? 0.55;
   flat[`${prefix}_custom_layers_json`] = JSON.stringify(normalizeCustomLayers(normalized.customLayers));
   for (const key of ASSET_KEYS) {
     const pk = key.replace(/-/g, '_');

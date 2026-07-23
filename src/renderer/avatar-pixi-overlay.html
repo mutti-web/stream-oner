@@ -48,6 +48,10 @@
       opacity: 0.8;
       margin-top: 6px;
     }
+    #face-status[data-state="ok"] { color: #7dffa3; opacity: 1; }
+    #face-status[data-state="lost"] { color: #ffb4a2; opacity: 1; }
+    #face-status[data-state="manual"] { color: #ffe08a; opacity: 1; }
+    #face-status[data-state="off"] { opacity: 0.7; }
     #hud.hidden-for-obs {
       display: none;
     }
@@ -56,9 +60,10 @@
 <body>
   <div id="stage"></div>
   <aside id="hud">
-    <h1>Pixi P1（手動 pose）</h1>
-    <label>yaw <input id="yaw" type="range" min="-30" max="30" value="0" step="1" /><span id="yaw-val">0</span></label>
-    <label>pitch <input id="pitch" type="range" min="-20" max="20" value="0" step="1" /><span id="pitch-val">0</span></label>
+    <h1>Pixi overlay（デバッグ）</h1>
+    <div class="meta" id="face-status" data-state="off">顔トラッキング: …</div>
+    <label>yaw <input id="yaw" type="range" min="-30" max="30" value="0" step="0.1" /><span id="yaw-val">0</span></label>
+    <label>pitch <input id="pitch" type="range" min="-20" max="20" value="0" step="0.1" /><span id="pitch-val">0</span></label>
     <div class="meta" id="status">WS: connecting…</div>
   </aside>
   <script src="/shared/avatar-constants.js"></script>

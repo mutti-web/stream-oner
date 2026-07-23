@@ -216,6 +216,20 @@
       label: '瞳の移動幅（px）',
       control: numberField(prefix, 'pupilOffsetMax', '最大オフセット', { step: 1, min: 1, max: 16, value: 4 }),
     });
+    body += fieldRow({
+      label: 'リグ種別（Pixi）',
+      desc: 'human=部位差のあるパララックス / integrated=一体感寄り（差を抑える）',
+      control:
+        '<md-outlined-select class="full-width" data-f="' + prefix + '_rigType" label="リグ種別">' +
+          '<md-select-option value="human"><div slot="headline">human（部位パララックス）</div></md-select-option>' +
+          '<md-select-option value="integrated"><div slot="headline">integrated（一体感）</div></md-select-option>' +
+        '</md-outlined-select>',
+    });
+    body += fieldRow({
+      label: '髪の揺れ（Pixi）',
+      desc: '顔の動き・声に対する髪スプリング。0 で追従のみ、大きいほど余韻が残ります',
+      control: numberField(prefix, 'hairSpringStrength', 'スプリング強さ', { step: '0.05', min: 0, max: 1, value: '0.55' }),
+    });
     body += '</div></details>';
 
     body += '<details class="av-adv-details">';

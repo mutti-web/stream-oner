@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * P1 Pixi アバターオーバーレイ
+ * P1+ Pixi アバターオーバーレイ
  * - 現行 DOM と同じ init / audio WS
  * - レイヤー PNG → Sprite、口パク・母音・笑い、p1/p2、displayMode
- * - yaw/pitch は HUD（MediaPipe は P2）
- * OBS: ?hud=0
+ * - pose WS（MediaPipe）+ HUD 手動（デバッグ）。OBS: ?hud=0
+ * - hair spring / rigType（human | integrated）
  */
 
 const WS_URL = 'ws://127.0.0.1:3003';
@@ -22,7 +22,7 @@ const LEVEL_LERP_CLOSE = AC.LEVEL_LERP_CLOSE ?? 0.14;
 const SLOT_REF_W = AC.SLOT_REF_W ?? 960;
 const SLOT_REF_H = AC.SLOT_REF_H ?? 420;
 
-const MULTIPLIERS = {
+const MULTIPLIERS_HUMAN = {
   body: 0.15,
   face: 1.0,
   eyes: 1.05,
@@ -33,9 +33,24 @@ const MULTIPLIERS = {
   composite: 0.7,
 };
 
+/** 一体型: 部位差を抑えて「一枚絵」寄りに */
+const MULTIPLIERS_INTEGRATED = {
+  body: 0.55,
+  face: 0.85,
+  eyes: 0.9,
+  mouth: 0.85,
+  nose: 0.85,
+  hair1: 0.75,
+  hair2: 0.7,
+  composite: 0.8,
+};
+
 const YAW_PX = 2.2;
 const PITCH_PX = 1.8;
 const SLOT_TARGET_H = 280;
+const HAIR_SPRING_DT = 1 / 60;
+/** WebGL MAX_TEXTURE_SIZE が 4096 の端末でも載るよう、長い辺を制限 */
+const MAX_TEX_EDGE = 2048;
 
 const hud = document.getElementById('hud');
 const yawInput = document.getElementById('yaw');
@@ -43,10 +58,16 @@ const pitchInput = document.getElementById('pitch');
 const yawVal = document.getElementById('yaw-val');
 const pitchVal = document.getElementById('pitch-val');
 const statusEl = document.getElementById('status');
+const faceStatusEl = document.getElementById('face-status');
 
 if (!SHOW_HUD && hud) hud.classList.add('hidden-for-obs');
 
-const pose = { yaw: 0, pitch: 0 };
+const pose = { yaw: 0, pitch: 0, tracking: false, fromFace: false };
+/** HUD をユーザーが操作中は face pose で上書きしない */
+let hudManualUntil = 0;
+let faceTrackEnabled = false;
+/** @type {Map<string, import('pixi.js').Texture>} */
+const textureCache = new Map();
 /** @type {import('pixi.js').Application | null} */
 let app = null;
 let displayMode = 'both';
@@ -56,18 +77,98 @@ function setStatus(text) {
   if (statusEl) statusEl.textContent = text;
 }
 
+function updateFaceStatusUi() {
+  if (!faceStatusEl) return;
+  if (!faceTrackEnabled) {
+    faceStatusEl.textContent = '顔トラッキング: OFF';
+    faceStatusEl.dataset.state = 'off';
+    return;
+  }
+  if (performance.now() < hudManualUntil) {
+    faceStatusEl.textContent = '顔トラッキング: 手動HUD優先';
+    faceStatusEl.dataset.state = 'manual';
+    return;
+  }
+  if (pose.fromFace && pose.tracking) {
+    faceStatusEl.textContent = `顔トラッキング: 追従中  yaw ${pose.yaw.toFixed(2)}  pitch ${pose.pitch.toFixed(2)}`;
+    faceStatusEl.dataset.state = 'ok';
+    return;
+  }
+  faceStatusEl.textContent = '顔トラッキング: 顔を検出できていません（カメラ・照明を確認）';
+  faceStatusEl.dataset.state = 'lost';
+}
+
 function lerp(a, b, t) { return a + (b - a) * t; }
+
+function multipliersFor(cfg) {
+  return cfg?.rigType === 'integrated' ? MULTIPLIERS_INTEGRATED : MULTIPLIERS_HUMAN;
+}
+
+function layerXY(cfg, name) {
+  const L = cfg?.layers?.[name];
+  return {
+    x: Number(L?.offsetX) || 0,
+    y: Number(L?.offsetY) || 0,
+    scaleMul: Number(L?.scale) > 0 ? Number(L.scale) : 1,
+  };
+}
+
+function syncHudLabels() {
+  if (yawVal) yawVal.textContent = Number(pose.yaw).toFixed(2);
+  if (pitchVal) pitchVal.textContent = Number(pose.pitch).toFixed(2);
+  if (yawInput && document.activeElement !== yawInput) yawInput.value = String(pose.yaw);
+  if (pitchInput && document.activeElement !== pitchInput) pitchInput.value = String(pose.pitch);
+  updateFaceStatusUi();
+}
 
 function syncPoseFromHud() {
   pose.yaw = Number(yawInput?.value) || 0;
   pose.pitch = Number(pitchInput?.value) || 0;
-  if (yawVal) yawVal.textContent = String(pose.yaw);
-  if (pitchVal) pitchVal.textContent = String(pose.pitch);
+  pose.fromFace = false;
+  hudManualUntil = performance.now() + 2500;
+  syncHudLabels();
+}
+
+function applyFacePose(msg) {
+  if (!faceTrackEnabled) return;
+  if (performance.now() < hudManualUntil) {
+    updateFaceStatusUi();
+    return;
+  }
+  pose.yaw = Number(msg.yaw) || 0;
+  pose.pitch = Number(msg.pitch) || 0;
+  pose.tracking = !!msg.tracking;
+  pose.fromFace = true;
+  syncHudLabels();
 }
 
 yawInput?.addEventListener('input', syncPoseFromHud);
 pitchInput?.addEventListener('input', syncPoseFromHud);
-syncPoseFromHud();
+syncHudLabels();
+setInterval(updateFaceStatusUi, 500);
+
+function makeSpring() {
+  return { x: 0, y: 0, vx: 0, vy: 0 };
+}
+
+function stepSpring(spring, targetX, targetY, strength, dt) {
+  const s = Math.max(0, Math.min(1, strength));
+  if (s < 0.01) {
+    spring.x = targetX;
+    spring.y = targetY;
+    spring.vx = 0;
+    spring.vy = 0;
+    return;
+  }
+  const k = 14 + 22 * s;
+  const damp = 6 + 10 * (1 - s * 0.55);
+  const ax = (targetX - spring.x) * k - spring.vx * damp;
+  const ay = (targetY - spring.y) * k - spring.vy * damp;
+  spring.vx += ax * dt;
+  spring.vy += ay * dt;
+  spring.x += spring.vx * dt;
+  spring.y += spring.vy * dt;
+}
 
 function hasAssetUrl(assets, key) {
   return !!(assets && assets[key]);
@@ -162,17 +263,47 @@ function makePlaceholder(color, w, h, label) {
 
 async function ensureTexture(url) {
   if (!url) return null;
+  if (textureCache.has(url)) return textureCache.get(url);
   try {
-    return await PIXI.Assets.load(url);
+    const img = await loadHtmlImage(url);
+    let source = img;
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    const maxEdge = Math.max(iw, ih);
+    if (maxEdge > MAX_TEX_EDGE) {
+      const scale = MAX_TEX_EDGE / maxEdge;
+      const cw = Math.max(1, Math.round(iw * scale));
+      const ch = Math.max(1, Math.round(ih * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, cw, ch);
+      source = canvas;
+      console.info(`[PixiAvatar] downscaled ${url} ${iw}x${ih} → ${cw}x${ch}`);
+    }
+    const tex = PIXI.Texture.from(source);
+    textureCache.set(url, tex);
+    return tex;
   } catch (e) {
     console.warn('[PixiAvatar] texture load failed', url, e);
     return null;
   }
 }
 
-function fitSprite(sp, maxH) {
+function loadHtmlImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`image load failed: ${url}`));
+    img.src = url;
+  });
+}
+
+function fitSprite(sp, maxH, scaleMul = 1) {
   if (!sp?.texture || !sp.texture.height) return 1;
-  const scale = maxH / sp.texture.height;
+  const scale = (maxH / sp.texture.height) * (scaleMul || 1);
   sp.scale.set(scale);
   return scale;
 }
@@ -197,12 +328,8 @@ function createEmptySlot(id) {
     jiggleHoldUntil: 0,
     peakJiggle: 1,
     smoothJiggle: 1,
-    baseFaceY: -36,
-    baseHair1Y: -88,
-    baseHair2Y: -70,
-    baseMouthY: 20,
-    baseNoseY: 8,
-    baseEyesY: -8,
+    hair1Spring: makeSpring(),
+    hair2Spring: makeSpring(),
   };
 }
 
@@ -213,6 +340,7 @@ async function buildLayerSprite(url, z, placeholderLabel, color) {
     sp.anchor.set(0.5);
     fitSprite(sp, SLOT_TARGET_H);
     sp.zIndex = z;
+    sp._pixiUrl = url;
     return sp;
   }
   if (!placeholderLabel) return null;
@@ -241,13 +369,16 @@ async function rebuildSlot(id, data) {
 
   if (s.useLayers) {
     const bodyUrl = a.face ? a.body : null;
-    const faceUrl = a.face || a.body || a['mouth-closed'] || null;
+    const faceUrl = a.face || a.body || null;
+    const mouthUrl = a['mouth-closed'] || a['mouth-open'] || null;
+    // レイヤーが1枚も無いときだけプレースホルダ（口だけのオレンジ箱を出さない）
+    const needFacePh = !faceUrl && !bodyUrl && !a.hair1 && !a['eyes-normal'];
 
-    s.sprites.body = await buildLayerSprite(bodyUrl, layerZ(cfg, 'body'), bodyUrl ? null : null, 0x3d5a80);
+    s.sprites.body = await buildLayerSprite(bodyUrl, layerZ(cfg, 'body'), null, 0x3d5a80);
     s.sprites.face = await buildLayerSprite(
       faceUrl,
       layerZ(cfg, 'face'),
-      faceUrl ? null : 'face',
+      needFacePh ? 'face' : null,
       0x98c1d9,
     );
     s.sprites.hair1 = await buildLayerSprite(a.hair1, layerZ(cfg, 'hair1'), null, 0x293241);
@@ -258,22 +389,17 @@ async function rebuildSlot(id, data) {
       null,
       0xe0fbfc,
     );
-    s.sprites.mouth = await buildLayerSprite(
-      a['mouth-closed'] || a['mouth-open'],
-      layerZ(cfg, 'mouth'),
-      a['mouth-closed'] || a['mouth-open'] ? null : 'mouth',
-      0xee6c4d,
-    );
+    // 口アセット未設定なら作らない（誤って口だけ見えるのを防ぐ）
+    s.sprites.mouth = mouthUrl
+      ? await buildLayerSprite(mouthUrl, layerZ(cfg, 'mouth'), null, 0xee6c4d)
+      : null;
     s.sprites.nose = await buildLayerSprite(a.nose, layerZ(cfg, 'nose'), null, 0xffb703);
 
     for (const [name, sp] of Object.entries(s.sprites)) {
       if (!sp) continue;
-      if (name === 'face') sp.position.y = s.baseFaceY;
-      if (name === 'hair1') sp.position.y = s.baseHair1Y;
-      if (name === 'hair2') sp.position.y = s.baseHair2Y;
-      if (name === 'eyes') sp.position.y = s.baseEyesY;
-      if (name === 'mouth') sp.position.y = s.baseMouthY;
-      if (name === 'nose') sp.position.y = s.baseNoseY;
+      const lo = layerXY(cfg, name);
+      sp.position.set(lo.x, lo.y);
+      if (sp.texture && lo.scaleMul !== 1) fitSprite(sp, SLOT_TARGET_H, lo.scaleMul);
       s.root.addChild(sp);
     }
   } else {
@@ -332,11 +458,21 @@ function layoutSlots() {
 async function applyInit(msg) {
   const c = msg.config || {};
   displayMode = c.displayMode === 'p1' || c.displayMode === 'p2' ? c.displayMode : 'both';
+  faceTrackEnabled = !!c.faceTrackEnabled;
+  if (!faceTrackEnabled) {
+    pose.tracking = false;
+    pose.fromFace = false;
+  }
   await rebuildSlot('p1', c.p1 || {});
   await rebuildSlot('p2', c.p2 || {});
   const n1 = Object.keys(slots.p1?.assets || {}).filter((k) => slots.p1.assets[k]).length;
   const n2 = Object.keys(slots.p2?.assets || {}).filter((k) => slots.p2.assets[k]).length;
-  setStatus(`WS ok / p1 assets:${n1} p2:${n2} mode:${displayMode}`);
+  const faceHint = faceTrackEnabled ? ' face:on' : '';
+  const loaded = ['face', 'hair1', 'eyes', 'mouth', 'body']
+    .filter((k) => slots.p1?.sprites?.[k]?.texture || (k === 'eyes' && slots.p1?.sprites?.eyes?.texture))
+    .join(',') || 'none';
+  setStatus(`WS ok / p1 assets:${n1} sprites:${loaded} mode:${displayMode}${faceHint}`);
+  updateFaceStatusUi();
 }
 
 function updateAudio(id, speaking, laughing, level, vowel) {
@@ -405,7 +541,8 @@ function applySlotVisuals(s, tNow) {
 
     const jiggle = getJiggleScale(s);
     if (s.sprites.mouth?.scale && s.sprites.mouth.texture) {
-      fitSprite(s.sprites.mouth, SLOT_TARGET_H);
+      const lo = layerXY(s.cfg, 'mouth');
+      fitSprite(s.sprites.mouth, SLOT_TARGET_H, lo.scaleMul);
       const base = Math.abs(s.sprites.mouth.scale.x) || 1;
       s.sprites.mouth.scale.set(base, base * jiggle);
     }
@@ -417,22 +554,39 @@ function applySlotVisuals(s, tNow) {
   const ox = pose.yaw * YAW_PX;
   const oy = pose.pitch * PITCH_PX;
   const L = s.sprites;
-  const put = (sp, name, baseY) => {
+  const mult = multipliersFor(s.cfg);
+  const put = (sp, name, extraX = 0, extraY = 0) => {
     if (!sp) return;
-    const m = MULTIPLIERS[name] ?? 1;
-    sp.position.set(ox * m, (baseY || 0) + oy * m);
+    const m = mult[name] ?? 1;
+    const lo = layerXY(s.cfg, name);
+    sp.position.set(lo.x + ox * m + extraX, lo.y + oy * m + extraY);
   };
 
+  const hairStrRaw = Number(s.cfg?.hairSpringStrength);
+  const hairStr = Number.isFinite(hairStrRaw) ? Math.max(0, Math.min(1, hairStrRaw)) : 0.55;
+  const audioBounce = ((s.smoothLevel ?? s.level ?? 0) / 100) * (2.2 + hairStr * 3.5);
+
   if (s.useLayers) {
-    put(L.body, 'body', 0);
-    put(L.face, 'face', s.baseFaceY);
-    put(L.hair1, 'hair1', s.baseHair1Y);
-    put(L.hair2, 'hair2', s.baseHair2Y);
-    put(L.eyes, 'eyes', s.baseEyesY);
-    put(L.mouth, 'mouth', s.baseMouthY);
-    put(L.nose, 'nose', s.baseNoseY);
+    put(L.body, 'body');
+    put(L.face, 'face');
+    put(L.eyes, 'eyes');
+    put(L.mouth, 'mouth');
+    put(L.nose, 'nose');
+
+    const h1 = layerXY(s.cfg, 'hair1');
+    const h2 = layerXY(s.cfg, 'hair2');
+    const h1m = mult.hair1 ?? 0.45;
+    const h2m = mult.hair2 ?? 0.35;
+    const t1x = h1.x + ox * h1m;
+    const t1y = h1.y + oy * h1m + audioBounce * 0.55;
+    const t2x = h2.x + ox * h2m;
+    const t2y = h2.y + oy * h2m + audioBounce;
+    stepSpring(s.hair1Spring, t1x, t1y, hairStr, HAIR_SPRING_DT);
+    stepSpring(s.hair2Spring, t2x, t2y, hairStr * 0.85, HAIR_SPRING_DT);
+    if (L.hair1) L.hair1.position.set(s.hair1Spring.x, s.hair1Spring.y);
+    if (L.hair2) L.hair2.position.set(s.hair2Spring.x, s.hair2Spring.y);
   } else {
-    put(L.composite, 'composite', 0);
+    put(L.composite, 'composite');
   }
 }
 
@@ -466,6 +620,8 @@ function connectWs() {
       } else if (msg.type === 'audio') {
         updateAudio('p1', !!msg.p1Speaking, !!msg.p1Laughing, Number(msg.p1) || 0, msg.p1Vowel || null);
         updateAudio('p2', !!msg.p2Speaking, !!msg.p2Laughing, Number(msg.p2) || 0, msg.p2Vowel || null);
+      } else if (msg.type === 'pose') {
+        applyFacePose(msg);
       }
     };
   };

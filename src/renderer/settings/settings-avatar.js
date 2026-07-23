@@ -41,6 +41,8 @@ function buildAvatarPayload(opts = {}) {
     p2Label: readMdValue(document.getElementById('av-p2-label')).trim() || '配信者B',
     smileDetectEnabled: document.getElementById('av-smile-detect').checked,
     smileSensitivity: readMdNum(document.getElementById('av-smile-sensitivity'), 50),
+    faceTrackEnabled: !!document.getElementById('av-face-track')?.checked,
+    cameraDeviceId: readMdValue(document.getElementById('av-camera')) || '',
   };
   if (window.avatarSettingsUI) {
     Object.assign(payload, window.avatarSettingsUI.collectAll());
@@ -96,6 +98,44 @@ function fillMicSelect(selectEl, devices, selectedId) {
   }
 }
 
+function fillCameraSelect(selectEl, devices, selectedId) {
+  if (!selectEl) return;
+  const prev = selectedId !== undefined ? selectedId : selectEl.value;
+  selectEl.innerHTML = '';
+  const empty = document.createElement('md-select-option');
+  empty.value = '';
+  empty.innerHTML = '<div slot="headline">— 既定カメラ —</div>';
+  selectEl.appendChild(empty);
+  devices.forEach((d) => {
+    const opt = document.createElement('md-select-option');
+    opt.value = d.deviceId;
+    const label = d.label || `カメラ (${d.deviceId.slice(0, 8)}…)`;
+    const head = document.createElement('div');
+    head.setAttribute('slot', 'headline');
+    head.textContent = label;
+    opt.appendChild(head);
+    selectEl.appendChild(opt);
+  });
+  queueMicrotask(() => {
+    try { setMdFieldValue(selectEl, prev || ''); } catch (_) {}
+  });
+}
+
+function updateFaceTrackStatus(st) {
+  const el = document.getElementById('av-face-status');
+  if (!el) return;
+  const on = !!document.getElementById('av-face-track')?.checked;
+  if (!on) {
+    el.textContent = '顔トラッキング: オフ';
+    return;
+  }
+  if (st?.faceError) {
+    el.textContent = `顔トラッキング: エラー — ${st.faceError}`;
+    return;
+  }
+  el.textContent = st?.faceRunning ? '顔トラッキング: 稼働中' : '顔トラッキング: 待機中';
+}
+
 async function scanMics() {
   try {
     await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -105,6 +145,17 @@ async function scanMics() {
   }
   const all = await navigator.mediaDevices.enumerateDevices();
   return all.filter((d) => d.kind === 'audioinput');
+}
+
+async function scanCameras() {
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+  } catch (e) {
+    showFb('av-fb', 'カメラ許可が必要です: ' + e.message, 'err');
+    return [];
+  }
+  const all = await navigator.mediaDevices.enumerateDevices();
+  return all.filter((d) => d.kind === 'videoinput');
 }
 
 function updateAvVuMeters(levels) {
@@ -130,7 +181,13 @@ async function initAvatar() {
   setMdFieldValue(document.getElementById('av-p2-label'), cfg.p2Label || '配信者B');
   document.getElementById('av-smile-detect').checked = !!cfg.smileDetectEnabled;
   setMdFieldValue(document.getElementById('av-smile-sensitivity'), cfg.smileSensitivity ?? 50);
+  const faceSw = document.getElementById('av-face-track');
+  if (faceSw) faceSw.checked = !!cfg.faceTrackEnabled;
   setMdFieldValue(document.getElementById('av-obs-url'), cfg.obsUrl || 'http://127.0.0.1:3003/overlay');
+  setMdFieldValue(
+    document.getElementById('av-obs-url-pixi'),
+    (cfg.obsUrlPixi || 'http://127.0.0.1:3003/overlay-pixi') + '?hud=0',
+  );
 
   if (window.avatarSettingsUI) {
     window.avatarSettingsUI.ensureBuilt();
@@ -143,8 +200,12 @@ async function initAvatar() {
   fillMicSelect(document.getElementById('av-mic-a'), mics, cfg.micADeviceId);
   fillMicSelect(document.getElementById('av-mic-b'), mics, cfg.micBDeviceId);
 
+  const cams = await scanCameras().catch(() => []);
+  fillCameraSelect(document.getElementById('av-camera'), cams, cfg.cameraDeviceId || '');
+
   const st = await api.getAvatarStatus().catch(() => ({ serverRunning: false }));
   setAvBadge(st);
+  updateFaceTrackStatus(st);
   suppressAutoSave--;
   avatarFormsHydrated = true;
 }
@@ -165,6 +226,19 @@ function bindAvatarActions() {
     fillMicSelect(document.getElementById('av-mic-b'), mics);
     showFb('av-fb', `マイク ${mics.length} 件を検出しました。`);
   });
+
+  document.getElementById('av-scan-cameras')?.addEventListener('click', async () => {
+    const cams = await scanCameras();
+    if (!cams.length) return;
+    fillCameraSelect(document.getElementById('av-camera'), cams);
+    showFb('av-fb', `カメラ ${cams.length} 件を検出しました。`);
+  });
+
+  document.getElementById('av-face-track')?.addEventListener('change', () => {
+    updateFaceTrackStatus();
+    debouncedAvatar();
+  });
+  document.getElementById('av-camera')?.addEventListener('change', () => debouncedAvatar());
 
   function closestActionButton(ev, selector) {
     const path = typeof ev.composedPath === 'function' ? ev.composedPath() : [];
@@ -227,6 +301,10 @@ function bindAvatarActions() {
   document.getElementById('av-copy-url').addEventListener('click', () => {
     const url = readMdValue(document.getElementById('av-obs-url'));
     navigator.clipboard?.writeText(url).then(() => showFb('av-fb', 'URL をコピーしました。'));
+  });
+  document.getElementById('av-copy-url-pixi')?.addEventListener('click', () => {
+    const url = readMdValue(document.getElementById('av-obs-url-pixi'));
+    navigator.clipboard?.writeText(url).then(() => showFb('av-fb', 'Pixi URL をコピーしました。'));
   });
   document.getElementById('av-go-suite-obs')?.addEventListener('click', (e) => {
     e.preventDefault();

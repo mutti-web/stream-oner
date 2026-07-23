@@ -78,6 +78,7 @@ function setAvBadge(status) {
     audioRunning: !!status?.audioRunning,
     error: status?.error,
   }));
+  if (typeof updateFaceTrackStatus === 'function') updateFaceTrackStatus(status);
   refreshSettingsSuiteIndicators();
 }
 

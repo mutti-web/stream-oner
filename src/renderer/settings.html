@@ -849,6 +849,28 @@
       </div>
     </div>
 
+    <div class="app-section-title">顔トラッキング（Pixi・任意・デフォルトOFF）</div>
+    <div class="app-card">
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">顔向きトラッキングを有効化</div>
+          <div class="app-desc">カメラで yaw/pitch を推定し、Pixi オーバーレイ（/overlay-pixi）のパララックスに反映します。現行 DOM オーバーレイには影響しません。カメラ許可が必要です</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="av-face-track" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-stack-md">
+        <md-outlined-button type="button" id="av-scan-cameras">
+          カメラをスキャン
+        </md-outlined-button>
+        <md-outlined-select id="av-camera" class="full-width" label="使用カメラ">
+          <md-select-option value=""><div slot="headline">— 既定カメラ —</div></md-select-option>
+        </md-outlined-select>
+        <div class="app-desc" id="av-face-status">顔トラッキング: オフ</div>
+      </div>
+    </div>
+
     <div class="app-section-title">レイヤー・動き</div>
     <p class="app-desc section-lead">画像と表示設定を分けて編集できます。</p>
     <md-tabs id="av-adv-tabs">
@@ -907,6 +929,12 @@
             <md-outlined-text-field id="av-obs-url" readonly></md-outlined-text-field>
             <md-outlined-button id="av-copy-url">コピー</md-outlined-button>
           </div>
+          <div class="app-label">Pixi 実験 URL（顔トラッキング・髪スプリング）</div>
+          <div class="url-row">
+            <md-outlined-text-field id="av-obs-url-pixi" readonly></md-outlined-text-field>
+            <md-outlined-button id="av-copy-url-pixi">コピー</md-outlined-button>
+          </div>
+          <div class="app-hint">OBS では末尾に <code>?hud=0</code> を付けて HUD を隠してください</div>
         </div>
       </div>
     </details>
