@@ -18,7 +18,7 @@
 | スタック | Electron 28 + Vanilla HTML/CSS/JS |
 | 設定 UI | `@material/web`（M3）+ `theme-apply.js` |
 | OBS HTML | 透過専用 CSS（`theme.css` 非読込） |
-| YouTube | `youtube-api.js` — InnerTube 優先、任意で Data API v3 |
+| YouTube | `youtube-api.js` — Data API 優先、InnerTube はページからキー取得 |
 | 配布 | `electron-builder` — Windows x64 NSIS のみ |
 
 ### ポート
@@ -150,12 +150,12 @@ src/
 
 | `yt.chatSource` | 起動時の挙動 |
 | --- | --- |
-| `auto`（既定） | API キーあり → Data API。なし → InnerTube。InnerTube 失敗 + キーあり → フォールバック |
+| `auto`（既定） | API キーあり → Data API 優先。なし → InnerTube（watch ページからキーを実行時取得）。InnerTube 失敗 + キーあり → フォールバック |
 | `innertube` | 常に InnerTube（キーがあっても Data API を使わない） |
 | `dataapi` | Data API のみ（キー必須） |
 
-- **InnerTube:** watch ページの `ytInitialData` → `live_chat/get_live_chat` ポーリング（公開 InnerTube キー使用、ユーザー API キー不要）
-- **Data API v3:** `liveChatId` は開始時 1 回取得、`pollingIntervalMillis` と設定の長い方で間隔
+- **Data API v3:** ユーザー／同梱の `apiKey`。`liveChatId` は開始時 1 回取得、`pollingIntervalMillis` と設定の長い方で間隔
+- **InnerTube:** watch ページの `ytInitialData` → `live_chat/get_live_chat`。API キーは HTML の `INNERTUBE_API_KEY` を実行時取得（リポジトリに直書きしない）
 - 設定 UI: **チャット** タブ → `<details>` 詳細設定（`yt-chat-source`）
 - `getStatus()` に `chatSource`, `activeChatBackend`（`innertube` / `dataapi`）を返す
 - `saveConfig` で `chatSource` 変更時、ポーラー稼働中なら再起動

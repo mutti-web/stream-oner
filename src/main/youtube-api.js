@@ -2,8 +2,6 @@
 
 const https = require('https');
 
-/** YouTube Web クライアントが使う公開 InnerTube キー（ユーザー API キー不要） */
-const INNERTUBE_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHL6lRqiXPj-WDrM7g';
 const INNERTUBE_HOST = 'www.youtube.com';
 const INNERTUBE_CLIENT = {
   clientName: 'WEB',
@@ -21,10 +19,29 @@ function normalizeChatSource(raw) {
 }
 
 /**
- * YouTube ライブチャット ポーラー（InnerTube 優先）
+ * watch ページ HTML から InnerTube 用キーを取り出す（リポジトリにキーを直書きしない）。
+ * @param {string} html
+ * @returns {string}
+ */
+function extractInnertubeApiKeyFromHtml(html) {
+  if (!html) return '';
+  const patterns = [
+    /"INNERTUBE_API_KEY"\s*:\s*"([A-Za-z0-9_-]+)"/,
+    /'INNERTUBE_API_KEY'\s*:\s*'([A-Za-z0-9_-]+)'/,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m?.[1]) return m[1];
+  }
+  return '';
+}
+
+/**
+ * YouTube ライブチャット ポーラー（Data API 優先）
  *
- * - 既定: watch ページ + live_chat/get_live_chat（Data API クォータ不要）
- * - 任意: apiKey がある場合は Data API v3 にフォールバック可能
+ * - 既定 (auto): ユーザー／同梱の Data API キーがあれば Data API v3
+ * - キーなし: watch ページから実行時取得したキーで InnerTube（ソースにキーを埋め込まない）
+ * - InnerTube 失敗時: キーがあれば Data API へフォールバック
  */
 class YouTubeChatPoller {
   constructor(ytConfig, onMessages) {
@@ -40,6 +57,8 @@ class YouTubeChatPoller {
     this.useDataApi = false;
     this.chatSource = 'auto';
     this.activeBackend = null;
+    /** InnerTube POST 用。watch HTML から実行時取得。ハードコードしない */
+    this._innertubeKey = '';
   }
 
   _resolveStartMode() {
@@ -54,6 +73,7 @@ class YouTubeChatPoller {
     if (chatSource === 'innertube') {
       return { useDataApi: false, allowDataApiFallback: false };
     }
+    // auto: Data API キーがあれば公式 API を優先
     return {
       useDataApi: hasKey,
       allowDataApiFallback: hasKey,
@@ -66,6 +86,7 @@ class YouTubeChatPoller {
     this.continuation = null;
     this.liveChatId = null;
     this.activeBackend = null;
+    this._innertubeKey = '';
 
     let mode;
     try {
@@ -110,6 +131,7 @@ class YouTubeChatPoller {
   stop() {
     this.running = false;
     this.activeBackend = null;
+    this._innertubeKey = '';
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -126,6 +148,11 @@ class YouTubeChatPoller {
     if (!videoId) throw new Error('videoId が未設定です');
 
     const html = await this._getText(`https://${INNERTUBE_HOST}/watch?v=${encodeURIComponent(videoId)}`);
+    this._innertubeKey = extractInnertubeApiKeyFromHtml(html);
+    if (!this._innertubeKey) {
+      throw new Error('InnerTube API キーを動画ページから取得できませんでした');
+    }
+
     const initial = this._parseYtInitialData(html);
     if (!initial) throw new Error('動画ページの解析に失敗しました');
 
@@ -356,11 +383,15 @@ class YouTubeChatPoller {
   }
 
   _postInnerTube(path, body) {
+    const key = String(this._innertubeKey || '').trim();
+    if (!key) {
+      return Promise.reject(new Error('InnerTube API キー未取得です（動画ページの再取得が必要です）'));
+    }
     const payload = JSON.stringify(body);
     return new Promise((resolve, reject) => {
       const req = https.request({
         hostname: INNERTUBE_HOST,
-        path: `${path}?key=${INNERTUBE_KEY}&prettyPrint=false`,
+        path: `${path}?key=${encodeURIComponent(key)}&prettyPrint=false`,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -425,3 +456,4 @@ class YouTubeChatPoller {
 module.exports = YouTubeChatPoller;
 module.exports.normalizeChatSource = normalizeChatSource;
 module.exports.CHAT_SOURCES = CHAT_SOURCES;
+module.exports.extractInnertubeApiKeyFromHtml = extractInnertubeApiKeyFromHtml;
