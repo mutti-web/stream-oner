@@ -39,6 +39,13 @@ StreamONER（本ソフトウェア）は MIT ライセンスです。詳細は [
 - **Homepage:** https://pixijs.com/
 - **Note:** アバター Pixi 実験（`feature/avatar-pixi` の `/overlay-pixi`）で使用
 
+### MediaPipe Tasks Vision（`@mediapipe/tasks-vision` / `src/renderer/vendor/mediapipe/`）
+
+- **License:** Apache License 2.0
+- **Copyright:** Google LLC / MediaPipe authors
+- **Homepage:** https://ai.google.dev/edge/mediapipe
+- **Note:** 顔向きトラッキング（Face Landmarker）。同梱: `vision_bundle.mjs`、WASM、`face_landmarker.task`
+
 ### Material Web（`@material/web`）
 
 - **License:** Apache License 2.0
@@ -67,7 +74,7 @@ StreamONER（本ソフトウェア）は MIT ライセンスです。詳細は [
 
 ## Apache License 2.0 について
 
-Apache-2.0 コンポーネント（Material Web / Material Symbols）を利用するにあたり、当該ライセンスの条件に従います。ライセンス全文: https://www.apache.org/licenses/LICENSE-2.0
+Apache-2.0 コンポーネント（Material Web / Material Symbols / MediaPipe Tasks Vision）を利用するにあたり、当該ライセンスの条件に従います。ライセンス全文: https://www.apache.org/licenses/LICENSE-2.0
 
 ---
 
