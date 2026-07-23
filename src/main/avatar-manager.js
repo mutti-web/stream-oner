@@ -23,13 +23,9 @@ const AUDIO_LEVEL_DELTA = AC.AUDIO_LEVEL_DELTA ?? 2;
 const RENDERER_DIR = path.join(__dirname, '../renderer');
 const customCss = require('./custom-css');
 
-const PIXI_OVERLAY_HTML = path.join(RENDERER_DIR, 'avatar-pixi-overlay.html');
-
 const serveAvatarOverlayStatic = createRendererStaticHandler(RENDERER_DIR, {
   '/avatar-overlay.css': 'avatar-overlay.css',
   '/avatar-overlay-runtime.js': 'avatar-overlay-runtime.js',
-  '/avatar-pixi-spike.js': 'avatar-pixi-spike.js',
-  '/vendor/pixi.min.js': 'vendor/pixi.min.js',
   '/shared/avatar-constants.js': 'shared/avatar-constants.js',
 });
 
@@ -158,8 +154,6 @@ class AvatarManager extends EventEmitter {
       smileDetectEnabled: s.get(K.smileDetect, false),
       smileSensitivity: s.get(K.smileSensitivity, 50),
       obsUrl: `${base}/overlay`,
-      /** Pixi スパイク用（現行 DOM とは別 URL。OBS では ?hud=0） */
-      obsUrlPixi: `${base}/overlay-pixi`,
       previewUrl: `${base}/preview`,
       wsUrl: `ws://127.0.0.1:${this._port}`,
       ...slotCfg.slotToFormFlat('p1', this.getSlot('p1')),
