@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="system" data-accent="default">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' 'unsafe-inline'; img-src 'self' https://cdn.discordapp.com data:; media-src 'self';" />
+  <title>設定 - StreamONER</title>
+  <script src="shared/theme-apply.js"></script>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <script src="shared/ui-helpers.js"></script>
+  <script type="module" src="shared/material/bundle.js"></script>
+  <script src="shared/app-state-ui.js"></script>
+  <script src="shared/status-indicator.js"></script>
+  <script src="shared/dashboard-controls.js"></script>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="header-main">
+      <div class="header-logo" aria-hidden="true">
+        <img class="header-logo-img" src="../../assets/icon.ico" alt="" />
+      </div>
+      <div>
+        <div class="header-title">StreamONER</div>
+        <div class="header-ver">v1.13.0</div>
+      </div>
+    </div>
+    <md-outlined-button id="btn-open-dashboard" title="配信用ダッシュボードを開く">ダッシュボード</md-outlined-button>
+  </div>
+
+  <md-tabs id="tabs-main" aria-label="設定タブ">
+    <md-primary-tab data-tab="general" active>
+      <md-icon slot="icon">settings</md-icon>
+      全般
+    </md-primary-tab>
+    <md-primary-tab data-tab="accounts">
+      <md-icon slot="icon">link</md-icon>
+      接続
+    </md-primary-tab>
+    <md-primary-tab data-tab="overlay">
+      <md-icon slot="icon">videocam</md-icon>
+      レイアウト
+    </md-primary-tab>
+    <md-primary-tab data-tab="chat">
+      <md-icon slot="icon">chat</md-icon>
+      チャット
+    </md-primary-tab>
+    <md-primary-tab data-tab="avatar">
+      <md-icon slot="icon">theater_comedy</md-icon>
+      アバター
+    </md-primary-tab>
+  </md-tabs>
+
+  <!-- ===== 全般タブ ===== -->
+  <div class="tab-panel active" id="panel-general">
+    <div class="app-section-title">初回セットアップ</div>
+    <div class="app-card setup-initial-card" id="setup-initial-card">
+      <details id="setup-initial-details" class="setup-initial-details" open>
+        <summary>初回セットアップの手順（完了すると折りたたみます）</summary>
+        <ul class="setup-list" id="setup-initial"></ul>
+      </details>
+    </div>
+
+    <div class="app-section-title">配信前チェック</div>
+    <p class="setup-broadcast-lead">配信直前に確認する項目です。動画 ID の入力以外の操作は<strong>ダッシュボード</strong>から行います。</p>
+    <div class="app-card" id="setup-broadcast-card">
+      <ul class="setup-list" id="setup-broadcast"></ul>
+      <div class="setup-broadcast-actions">
+        <md-outlined-button id="btn-setup-open-dashboard">ダッシュボードを開く</md-outlined-button>
+      </div>
+    </div>
+
+    <div class="app-section-title">表示</div>
+    <div class="app-card">
+      <div class="app-field">
+        <md-outlined-select id="ui-theme-preference" class="full-width" label="テーマ">
+          <md-select-option value="system" selected><div slot="headline">システムに合わせる</div></md-select-option>
+          <md-select-option value="dark"><div slot="headline">ダーク</div></md-select-option>
+          <md-select-option value="light"><div slot="headline">ライト</div></md-select-option>
+        </md-outlined-select>
+      </div>
+      <div class="app-field">
+        <md-outlined-select id="ui-accent-preference" class="full-width" label="アクセント色">
+          <md-select-option value="default" selected><div slot="headline">ブルー（標準）</div></md-select-option>
+          <md-select-option value="neutral"><div slot="headline">ニュートラル（グレー）</div></md-select-option>
+          <md-select-option value="green"><div slot="headline">グリーン</div></md-select-option>
+          <md-select-option value="yellow"><div slot="headline">イエロー</div></md-select-option>
+          <md-select-option value="red"><div slot="headline">レッド</div></md-select-option>
+          <md-select-option value="pink"><div slot="headline">ピンク</div></md-select-option>
+        </md-outlined-select>
+        <div class="app-hint">設定・ダッシュボードの見た目です。OBS オーバーレイには影響しません。</div>
+      </div>
+    </div>
+
+    <div class="app-section-title setup-scroll-target" id="sec-suite-features">配信表示の ON / OFF</div>
+    <div class="app-card">
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">Discord</div>
+        </div>
+        <div class="app-toggle-controls">
+          <span id="lamp-suite-discord" class="status-indicator is-off" role="status" aria-label="Discord 状態" hidden></span>
+          <md-switch id="suite-discord-enabled" icons show-only-selected-icon selected></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">チャット</div>
+        </div>
+        <div class="app-toggle-controls">
+          <span id="lamp-suite-youtube" class="status-indicator is-off" role="status" aria-label="チャット 状態" hidden></span>
+          <md-switch id="suite-youtube-enabled" icons show-only-selected-icon selected></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">アバター</div>
+        </div>
+        <div class="app-toggle-controls">
+          <span id="lamp-suite-avatar" class="status-indicator is-off" role="status" aria-label="アバター 状態" hidden></span>
+          <md-switch id="suite-avatar-enabled" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+    </div>
+    <div class="info-box">使わない機能は OFF で通信・解析を止めます。切り替えは自動保存されます。</div>
+
+    <div class="app-section-title setup-scroll-target" id="sec-setup-remote">スマホダッシュボード</div>
+    <div class="app-card" id="remote-dashboard-card">
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">スマホダッシュボードを有効にする</div>
+          <div class="app-desc">同一 Wi‑Fi 内のスマホから操作できます。</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="remote-enabled" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+      <div id="remote-body" hidden>
+      <div class="app-field app-stack-md">
+        <div class="app-label">スマホから開く</div>
+        <div class="remote-access-row">
+          <div class="remote-qr-panel" id="remote-lan-qr-wrap" hidden>
+            <img id="remote-lan-qr" alt="スマホ用 URL の QR コード" width="160" height="160" />
+            <div id="remote-lan-qr-error" class="remote-qr-error" hidden></div>
+          </div>
+          <div class="app-stack-sm remote-access-main">
+            <div class="url-row">
+              <md-outlined-text-field id="remote-lan-url" readonly label="スマホ用 URL（LAN）"></md-outlined-text-field>
+              <md-outlined-button class="remote-url-copy" data-url-id="remote-lan-url">コピー</md-outlined-button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <details class="app-details app-details-section" id="remote-pin-details">
+        <summary>PIN</summary>
+        <div class="app-field app-stack-sm">
+          <md-outlined-text-field id="remote-pin-display" class="full-width" readonly label="PIN"></md-outlined-text-field>
+          <div class="app-hint" id="remote-pin-hint">再生成後に表示。ログイン確認で非表示</div>
+          <md-outlined-button type="button" id="btn-remote-regenerate-pin">PIN を再生成（全端末ログアウト）</md-outlined-button>
+        </div>
+      </details>
+      <details class="app-details app-details-section" id="remote-advanced-details">
+        <summary>詳細設定</summary>
+        <div class="app-field app-stack-md">
+          <div class="app-grid-2">
+            <md-outlined-text-field id="remote-port" type="number" label="ポート" min="1024" max="65535" step="1"></md-outlined-text-field>
+            <md-outlined-text-field id="remote-max-sessions" type="number" label="同時接続上限（台）" min="1" max="50" step="1"></md-outlined-text-field>
+          </div>
+          <div class="app-row app-row-wrap">
+            <md-outlined-select id="remote-lan-interface" label="LAN インターフェース" class="remote-lan-select">
+              <md-select-option value=""><div slot="headline">自動（最初の LAN IP）</div></md-select-option>
+            </md-outlined-select>
+            <md-outlined-button type="button" id="btn-remote-refresh-lan">URL を再取得</md-outlined-button>
+          </div>
+          <div class="app-hint">PC に Wi‑Fi / 有線 / VPN など複数の IP があるとき、スマホ用 URL・QR に載せる IP を選びます。通常は自動で問題ありません。</div>
+          <md-outlined-button type="button" id="btn-remote-restart-server">サーバー再起動</md-outlined-button>
+        </div>
+      </details>
+      <div class="app-field app-stack-sm">
+        <div class="app-label">接続中の端末</div>
+        <div id="remote-sessions-list" class="remote-sessions-list empty">リモートは無効です</div>
+      </div>
+      </div>
+    </div>
+
+    <div class="app-section-title setup-scroll-target" id="sec-settings-backup">設定のバックアップ</div>
+    <div class="info-box">
+      シークレット（API キー・パスワード・PIN など）は含みません。別 PC への移行やバックアップ用です。
+    </div>
+    <div class="app-card">
+      <div class="app-field">
+        <div class="app-row app-row-wrap">
+          <md-outlined-button type="button" id="btn-settings-export">設定をエクスポート...</md-outlined-button>
+          <md-outlined-button type="button" id="btn-settings-import">設定をインポート...</md-outlined-button>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-fb" id="general-fb"></div>
+  </div>
+
+  <!-- ===== レイアウトタブ ===== -->
+  <div class="tab-panel" id="panel-overlay">
+    <div class="app-section-title setup-scroll-target" id="sec-setup-obs">OBS ブラウザソース（統合 URL）</div>
+    <div class="app-card" id="card-setup-obs">
+      <div class="app-field app-stack-md">
+        <div class="obs-recommended">
+          Discord・YouTube・アバターを1枚にまとめます。個別 URL が必要なときだけ下の「詳細」を開いてください。<span class="obs-badge">推奨</span>
+        </div>
+        <div class="app-stack-sm">
+          <div class="app-label">統合 OBS URL</div>
+          <div class="url-row">
+            <md-outlined-text-field id="suite-combined-url" readonly></md-outlined-text-field>
+            <md-filled-button id="suite-combined-copy">コピー</md-filled-button>
+          </div>
+          <div class="app-hint">ソース「ブラウザ」→ URL に貼付→透過許可・1920×1080。WS 接続時は自動検出</div>
+        </div>
+        <div class="app-row">
+          <md-outlined-button id="setup-obs-done">OBS に追加した</md-outlined-button>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-section-title setup-scroll-target" id="sec-custom-css">カスタム CSS（OBS オーバーレイ）</div>
+    <div class="info-box">
+      Discord・チャット・アバターに共通適用。反映は数秒。
+    </div>
+    <div class="app-card">
+      <div class="app-field app-stack-sm">
+        <div class="app-label">CSS ファイル</div>
+        <div class="app-row">
+          <md-outlined-text-field id="css-path" class="app-grow" placeholder="CSSファイルを選択..." readonly></md-outlined-text-field>
+          <md-outlined-button id="browse-btn">参照...</md-outlined-button>
+          <md-text-button id="clear-btn" style="--md-text-button-label-text-color: var(--md-sys-color-error);">クリア</md-text-button>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-section-title">デスクトップ透過オーバーレイ</div>
+    <div class="app-card">
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">Discord 透過オーバーレイを起動時に開く</div>
+          <div class="app-desc">デスクトップに Discord を重ねて表示したい場合のみ ON にしてください（OBS のみ利用なら OFF 推奨）。</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="suite-desktop-overlay-enabled" icons show-only-selected-icon selected></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">クリック透過</div>
+          <div class="app-desc">オーバーレイ上のクリックを背後に透過</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="click-through" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">位置ロック</div>
+          <div class="app-desc">オーバーレイを動かせなくする</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="pos-lock" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-section-title setup-scroll-target" id="sec-layout-slots">レイアウトスロット</div>
+    <div class="info-box data-slot-info-box">
+      <p>いまの<strong>OBS 配置・チャット表示・アバター見た目・スパチャ段階・OBS イベント連動・カスタム CSS</strong>をスロットに保存し、あとから一括で戻せます（API キー・動画 ID・NG リスト・マイク設定は含みません）。</p>
+      <ol class="data-slot-steps">
+        <li>オーバーレイとチャット演出を整える</li>
+        <li>空きスロットの「保存」、または使用中スロットの「上書き保存」</li>
+        <li>「読み込む」でレイアウトを一括反映</li>
+      </ol>
+    </div>
+    <div id="data-slots-grid" class="data-slots-grid" aria-label="レイアウトスロット" role="list">
+      <p class="data-slots-loading" id="data-slots-loading">読み込み中…</p>
+    </div>
+
+    <dialog id="data-slot-dialog" class="data-slot-dialog">
+      <form method="dialog" id="data-slot-dialog-form" class="data-slot-dialog-form">
+        <h3 class="data-slot-dialog-title" id="data-slot-dialog-title">スロット名</h3>
+        <md-outlined-text-field
+          id="data-slot-dialog-name"
+          class="full-width"
+          label="スロット名"
+          placeholder="例: ゲーム配信・コラボ用"
+          maxlength="32">
+        </md-outlined-text-field>
+        <div class="data-slot-dialog-actions">
+          <md-text-button type="button" id="data-slot-dialog-cancel">キャンセル</md-text-button>
+          <md-filled-button type="submit" value="ok" id="data-slot-dialog-ok">OK</md-filled-button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="app-section-title">リハーサルプレビュー</div>
+    <div class="app-card">
+      <div class="app-field app-stack-sm">
+        <div class="app-hint">1920×1080 の統合レイアウトでモックコメントを自動再生します。配信前の見た目確認に使えます。</div>
+        <div class="app-row">
+          <md-outlined-button type="button" id="btn-open-rehearsal">リハーサルを開く</md-outlined-button>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-section-title">統合 OBS レイアウト</div>
+    <div class="app-card" id="suite-layout-editor">
+      <div class="app-field">
+        <div class="app-hint">キャンバス 1920×1080。位置は下の数値かリハーサルのドラッグで調整</div>
+      </div>
+      <div class="app-field app-stack-md" id="suite-layout-discord">
+        <div class="app-subsection-title">Discord パネル</div>
+        <div class="app-grid-2">
+          <md-outlined-select id="suite-discord-anchor" label="基準位置">
+            <md-select-option value="top-left"><div slot="headline">左上</div></md-select-option>
+            <md-select-option value="top-right"><div slot="headline">右上</div></md-select-option>
+            <md-select-option value="bottom-left"><div slot="headline">左下</div></md-select-option>
+            <md-select-option value="bottom-right"><div slot="headline">右下</div></md-select-option>
+          </md-outlined-select>
+          <md-outlined-text-field id="suite-discord-width" type="number" label="幅（px）" min="120" max="1920" step="10"></md-outlined-text-field>
+        </div>
+        <div class="app-grid-2">
+          <md-outlined-text-field id="suite-discord-offset-x" type="number" label="横オフセット（px）" min="0" max="1920" step="4"></md-outlined-text-field>
+          <md-outlined-text-field id="suite-discord-offset-y" type="number" label="縦オフセット（px）" min="0" max="1080" step="4"></md-outlined-text-field>
+          <md-outlined-text-field id="suite-discord-height" type="number" label="高さ（px）" min="80" max="1080" step="10"></md-outlined-text-field>
+        </div>
+      </div>
+      <div class="app-field app-stack-md" id="suite-layout-youtube">
+        <div class="app-subsection-title">チャット パネル</div>
+        <div class="app-grid-2">
+          <md-outlined-select id="suite-youtube-anchor" label="基準位置">
+            <md-select-option value="top-left"><div slot="headline">左上</div></md-select-option>
+            <md-select-option value="top-right"><div slot="headline">右上</div></md-select-option>
+            <md-select-option value="bottom-left"><div slot="headline">左下</div></md-select-option>
+            <md-select-option value="bottom-right"><div slot="headline">右下</div></md-select-option>
+          </md-outlined-select>
+          <md-outlined-text-field id="suite-youtube-width" type="number" label="幅（px）" min="200" max="1920" step="10"></md-outlined-text-field>
+        </div>
+        <div class="app-grid-2">
+          <md-outlined-text-field id="suite-youtube-offset-x" type="number" label="横オフセット（px）" min="0" max="1920" step="4"></md-outlined-text-field>
+          <md-outlined-text-field id="suite-youtube-offset-y" type="number" label="縦オフセット（px）" min="0" max="1080" step="4"></md-outlined-text-field>
+          <md-outlined-text-field id="suite-youtube-height" type="number" label="高さ（px）" min="120" max="1080" step="10"></md-outlined-text-field>
+        </div>
+        <div class="app-hint"><strong>チャット</strong>タブの「表示位置」はコメントの出る隅です。両方合わせて調整してください。</div>
+      </div>
+      <div class="app-field app-stack-md" id="suite-layout-avatar">
+        <div class="app-subsection-title">アバター パネル</div>
+        <div class="app-grid-2">
+          <md-outlined-select id="suite-avatar-anchor" label="基準位置">
+            <md-select-option value="top-left"><div slot="headline">左上</div></md-select-option>
+            <md-select-option value="top-right"><div slot="headline">右上</div></md-select-option>
+            <md-select-option value="bottom-left"><div slot="headline">左下</div></md-select-option>
+            <md-select-option value="bottom-right"><div slot="headline">右下</div></md-select-option>
+          </md-outlined-select>
+          <md-outlined-text-field id="suite-avatar-width" type="number" label="幅（px）" min="200" max="1920" step="10"></md-outlined-text-field>
+        </div>
+        <div class="app-grid-2">
+          <md-outlined-text-field id="suite-avatar-offset-x" type="number" label="横オフセット（px）" min="0" max="1920" step="4"></md-outlined-text-field>
+          <md-outlined-text-field id="suite-avatar-offset-y" type="number" label="縦オフセット（px）" min="0" max="1080" step="4"></md-outlined-text-field>
+          <md-outlined-text-field id="suite-avatar-height" type="number" label="高さ（px）" min="80" max="1080" step="10"></md-outlined-text-field>
+        </div>
+        <div class="app-hint">配信者 A/B はパネル内で左右に配置されます。幅を狭めるとコンパクトな表示になります。</div>
+      </div>
+    </div>
+
+    <details class="app-details app-details-section" id="suite-obs-ports-section">
+      <summary>OBS オーバーレイポート（変更後はアプリ再起動が必要）</summary>
+      <div class="app-field">
+        <div class="app-hint">Discord / YouTube / アバターのローカル HTTP ポートです。競合時は番号を変えて再起動し、OBS のブラウザソース URL も合わせて更新してください。</div>
+      </div>
+      <div class="app-field">
+        <div class="app-grid-2">
+          <md-outlined-text-field id="suite-port-discord-http" type="number" label="Discord HTTP" min="1024" max="65535" step="1"></md-outlined-text-field>
+          <md-outlined-text-field id="suite-port-discord-ws" type="number" label="Discord WebSocket" min="1024" max="65535" step="1"></md-outlined-text-field>
+          <md-outlined-text-field id="suite-port-youtube" type="number" label="YouTube" min="1024" max="65535" step="1"></md-outlined-text-field>
+          <md-outlined-text-field id="suite-port-avatar" type="number" label="アバター" min="1024" max="65535" step="1"></md-outlined-text-field>
+        </div>
+      </div>
+    </details>
+
+    <details class="app-details app-details-section">
+      <summary>詳細設定（保持件数・個別 URL）</summary>
+      <div class="app-field">
+        <div class="app-grid-2">
+          <md-outlined-text-field
+            id="suite-dash-chat-limit"
+            type="number"
+            label="ダッシュボード保持（チャット件数）"
+            min="50" max="2000" step="50">
+          </md-outlined-text-field>
+          <md-outlined-text-field
+            id="suite-dash-sc-limit"
+            type="number"
+            label="ダッシュボード保持（スパチャ件数）"
+            min="10" max="200" step="5">
+          </md-outlined-text-field>
+        </div>
+      </div>
+      <div class="app-field app-stack-md">
+        <div class="app-label">個別 URL（上級者向け・ソースを分ける場合）</div>
+        <div class="app-url-stack">
+          <div class="url-row">
+            <md-outlined-text-field id="suite-url-discord" readonly></md-outlined-text-field>
+            <md-outlined-button class="suite-url-copy" data-url-id="suite-url-discord">コピー</md-outlined-button>
+          </div>
+          <div class="url-mini">Discord</div>
+        </div>
+        <div class="app-url-stack">
+          <div class="url-row">
+            <md-outlined-text-field id="suite-url-youtube" readonly></md-outlined-text-field>
+            <md-outlined-button class="suite-url-copy" data-url-id="suite-url-youtube">コピー</md-outlined-button>
+          </div>
+          <div class="url-mini">YouTube</div>
+        </div>
+        <div class="app-url-stack">
+          <div class="url-row">
+            <md-outlined-text-field id="suite-url-avatar" readonly></md-outlined-text-field>
+            <md-outlined-button class="suite-url-copy" data-url-id="suite-url-avatar">コピー</md-outlined-button>
+          </div>
+          <div class="url-mini">アバター（高さ 400 程度推奨）</div>
+        </div>
+      </div>
+    </details>
+
+    <div class="app-fb" id="integration-fb"></div>
+  </div>
+
+  <!-- ===== 接続タブ ===== -->
+  <div class="tab-panel" id="panel-accounts">
+    <details class="app-details discord-connect-details" id="discord-connect-details" open>
+      <summary id="discord-connect-summary">Discord 接続</summary>
+      <div class="app-card">
+      <div class="app-field">
+        <div class="app-label">Client ID</div>
+        <div class="app-desc"><a href="#" id="portal-link">Discord Developer Portal</a> の「APPLICATION ID」</div>
+        <md-outlined-text-field
+          id="client-id"
+          class="full-width"
+          placeholder="例: 1234567890123456789"
+          maxlength="20">
+        </md-outlined-text-field>
+        <div class="field-error" id="cid-err">有効な数値の Client ID を入力してください</div>
+      </div>
+      <div class="app-field">
+        <div class="app-label">Client Secret</div>
+        <md-outlined-text-field
+          id="client-secret"
+          class="full-width"
+          type="password"
+          placeholder="Client Secret を入力..."
+          autocomplete="off">
+        </md-outlined-text-field>
+        <div class="app-hint" id="secret-hint"></div>
+      </div>
+      <div class="app-field app-stack-sm">
+        <div class="app-row app-row-wide">
+          <span class="app-badge is-warn" id="rpc-badge" role="status" aria-label="Discord RPC 状態">接続中...</span>
+          <md-filled-button id="reconnect-btn">
+            <md-icon slot="icon">sync</md-icon>
+            再接続
+          </md-filled-button>
+          <md-outlined-button id="portal-btn">
+            <md-icon slot="icon">open_in_new</md-icon>
+            Developer Portal
+          </md-outlined-button>
+          <md-text-button
+            id="clear-discord-auth-btn"
+            style="--md-text-button-label-text-color: var(--md-sys-color-error);">
+            保存済み認証をクリア
+          </md-text-button>
+        </div>
+      </div>
+    </div>
+    <details class="app-details app-details-section" id="discord-setup-help-details">
+      <summary>初回セットアップ手順</summary>
+      <div class="info-box" id="discord-connect-help">
+        1. Developer Portal でアプリ作成 → APPLICATION ID をコピー<br>
+        2. <code>OAuth2 → General</code> の Redirects に <code>http://localhost</code> を追加<br>
+        3. Client ID/Secret を入力（自動保存）→「再接続」<br>
+        承認画面は初回や設定変更時のみ（通常は保存済みトークンで自動接続）。「保存済み認証をクリア」後は再承認が必要になることがあります。
+      </div>
+    </details>
+    </details>
+
+    <div class="app-section-title setup-scroll-target" id="sec-setup-yt-oauth">YouTube 接続</div>
+    <div class="app-card">
+      <div class="app-field app-stack-sm">
+        <div>
+          <div class="app-label">OAuth 連携</div>
+          <div class="app-desc">連携後、配信開始時に動画 ID を自動検出できます。</div>
+        </div>
+        <div class="app-row app-row-wide">
+          <span class="app-badge is-warn" id="yt-oauth-badge" role="status" aria-label="YouTube 連携状態">確認中...</span>
+          <md-filled-button id="yt-oauth-connect" type="button">
+            <md-icon slot="icon">link</md-icon>
+            YouTube と連携
+          </md-filled-button>
+          <md-outlined-button id="yt-oauth-disconnect" type="button" hidden>
+            <md-icon slot="icon">link_off</md-icon>
+            連携を解除
+          </md-outlined-button>
+          <md-outlined-button id="yt-oauth-cancel" type="button" hidden>
+            <md-icon slot="icon">close</md-icon>
+            認可をキャンセル
+          </md-outlined-button>
+          <md-outlined-button id="yt-oauth-detect" type="button">
+            <md-icon slot="icon">search</md-icon>
+            配信を検出（テスト）
+          </md-outlined-button>
+        </div>
+        <div class="app-hint" id="yt-oauth-hint"></div>
+        <div class="app-fb" id="yt-oauth-fb"></div>
+      </div>
+    </div>
+
+    <details class="app-details app-details-section" id="yt-manual-details">
+      <summary>手動設定（フォールバック）</summary>
+      <div class="app-card">
+        <div class="app-field">
+          <div class="app-label">API キー（任意）</div>
+          <div class="app-desc">OAuth を使わない場合や Data API フォールバック用。未入力でも InnerTube でチャット取得できます。取得方式は<strong>チャット</strong>タブの「詳細設定」を参照してください。</div>
+          <md-outlined-text-field
+            id="yt-api-key"
+            class="full-width"
+            type="password"
+            placeholder="API キーを入力..."
+            autocomplete="off">
+          </md-outlined-text-field>
+          <div class="app-hint" id="yt-key-hint"></div>
+        </div>
+        <div class="app-field app-stack-sm">
+          <div>
+            <div class="app-label">ポーリングのテスト</div>
+            <div class="app-desc">動画 ID は<strong>ダッシュボード</strong>で設定。配信時の開始・停止もダッシュボード推奨。</div>
+          </div>
+          <div class="app-row app-row-wide">
+            <span class="app-badge is-warn" id="yt-badge" role="status" aria-label="チャットポーリング状態">停止中</span>
+            <md-filled-button id="yt-start" type="button">
+              <md-icon slot="icon">play_arrow</md-icon>
+              ポーリング開始
+            </md-filled-button>
+            <md-outlined-button id="yt-stop" type="button">
+              <md-icon slot="icon">stop</md-icon>
+              ポーリング停止
+            </md-outlined-button>
+          </div>
+          <div class="app-hint" id="yt-err-hint"></div>
+        </div>
+      </div>
+      <div class="info-box">
+        <strong>手動セットアップ:</strong><br>
+        1. <a href="#" id="gcloud-link">Google Cloud Console</a> で YouTube Data API v3 を有効化<br>
+        2. 認証情報 → API キーを作成（任意）<br>
+        3. 動画 ID は<strong>ダッシュボード</strong>で入力（または OAuth 連携で自動検出）
+      </div>
+    </details>
+
+    <div class="app-fb" id="yt-conn-fb"></div>
+
+    <div class="app-section-title setup-scroll-target" id="sec-setup-obs-ws">OBS WebSocket</div>
+    <div class="app-card">
+      <div class="app-field app-stack-md">
+        <div>
+          <div class="app-label">ダッシュボード連携</div>
+          <div class="app-desc">ツール → WebSocket サーバー設定を有効化し、接続情報を下に入力</div>
+        </div>
+        <div class="app-grid-2">
+          <md-outlined-text-field id="obs-ws-host" label="ホスト"></md-outlined-text-field>
+          <md-outlined-text-field id="obs-ws-port" type="number" label="ポート" min="1" max="65535" step="1"></md-outlined-text-field>
+        </div>
+        <md-outlined-text-field id="obs-ws-password" class="full-width" type="password" label="パスワード（変更時のみ入力）"></md-outlined-text-field>
+        <div class="app-desc" id="obs-ws-password-hint"></div>
+      </div>
+    </div>
+
+    <div class="app-fb" id="dc-fb"></div>
+  </div>
+
+  <!-- ===== チャットタブ ===== -->
+  <div class="tab-panel" id="panel-chat">
+    <div class="app-section-title">OBS 上の表示設定</div>
+    <div class="app-hint" style="margin-bottom: 10px;">
+      コメント欄の幅・間隔・表示位置は以下で調整します。統合画面でのパネル配置は<strong>レイアウト</strong>タブを参照してください。
+    </div>
+    <div class="app-card">
+      <div class="app-field">
+        <div class="app-grid-2">
+          <md-outlined-text-field
+            id="yt-width"
+            type="number"
+            label="コメント欄の幅（px）"
+            value="400" min="200" max="1200" step="10">
+          </md-outlined-text-field>
+          <md-outlined-text-field
+            id="yt-gap"
+            type="number"
+            label="コメント間隔（px）"
+            value="6" min="0" max="48" step="1">
+          </md-outlined-text-field>
+        </div>
+      </div>
+      <div class="app-field">
+        <div class="app-grid-2">
+          <md-outlined-select id="yt-max" label="最大コメント数">
+            <md-select-option value="4"><div slot="headline">4件</div></md-select-option>
+            <md-select-option value="6"><div slot="headline">6件</div></md-select-option>
+            <md-select-option value="8" selected><div slot="headline">8件</div></md-select-option>
+            <md-select-option value="10"><div slot="headline">10件</div></md-select-option>
+            <md-select-option value="12"><div slot="headline">12件</div></md-select-option>
+          </md-outlined-select>
+          <md-outlined-text-field
+            id="yt-duration"
+            type="number"
+            label="表示時間（ms）"
+            value="8000" min="2000" step="1000">
+          </md-outlined-text-field>
+        </div>
+      </div>
+      <div class="app-field">
+        <div class="app-grid-2">
+          <md-outlined-select id="yt-anim" label="アニメーション">
+            <md-select-option value="slide-up" selected><div slot="headline">スライドアップ</div></md-select-option>
+            <md-select-option value="fade-in"><div slot="headline">フェードイン</div></md-select-option>
+          </md-outlined-select>
+          <md-outlined-select id="yt-pos" label="表示位置">
+            <md-select-option value="bottom-right" selected><div slot="headline">右下</div></md-select-option>
+            <md-select-option value="bottom-left"><div slot="headline">左下</div></md-select-option>
+            <md-select-option value="top-right"><div slot="headline">右上</div></md-select-option>
+            <md-select-option value="top-left"><div slot="headline">左上</div></md-select-option>
+          </md-outlined-select>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-section-title">フィルター・NG設定</div>
+    <div class="app-card">
+      <div class="app-field">
+        <div class="app-label">NGワード</div>
+        <div class="app-desc">1行に1つ。コメントに含まれると非表示</div>
+        <md-outlined-text-field id="yt-ng-words" class="full-width" type="textarea" rows="4"></md-outlined-text-field>
+      </div>
+      <div class="app-field">
+        <div class="app-label">NGユーザー（チャンネルID）</div>
+        <div class="app-desc">1行に1つ</div>
+        <md-outlined-text-field id="yt-ng-users" class="full-width" type="textarea" rows="3"></md-outlined-text-field>
+      </div>
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">メンバー限定</div>
+          <div class="app-desc">メンバーのみ表示</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="yt-allow-members" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">スパチャのみ</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="yt-sc-only" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">ボットコマンド非表示</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="yt-hide-bot" icons show-only-selected-icon selected></md-switch>
+        </div>
+      </div>
+      <div class="app-field">
+        <md-outlined-text-field id="yt-bot-prefix" class="app-max-w-xs" label="ボット接頭辞"></md-outlined-text-field>
+      </div>
+    </div>
+
+    <div class="app-section-title">セッションログ</div>
+    <div class="app-card">
+      <div class="app-field app-stack-sm">
+        <div class="app-hint">配信中のコメントを記録し、終了後に YouTube ライブのタイムスタンプ URL を出力します。ラグ補正は URL の再生位置をずらします（正の値で早める）。</div>
+        <div class="app-grid-2">
+          <md-outlined-text-field id="yt-session-lag" type="number" label="ラグ補正（秒）" min="-120" max="30" step="1" value="0"></md-outlined-text-field>
+          <md-outlined-text-field id="yt-session-max-sessions" type="number" label="保持セッション数" min="1" max="500" step="1" value="30"></md-outlined-text-field>
+        </div>
+        <md-outlined-text-field id="yt-session-max-days" type="number" class="full-width" label="保持日数" min="1" max="3650" step="1" value="90"></md-outlined-text-field>
+      </div>
+    </div>
+
+    <div class="app-section-title">スパチャ段階</div>
+    <div class="app-card" id="yt-sc-tiers-card">
+      <div class="app-field">
+        <div class="app-hint">金額（円）のしきい値ごとに、オーバーレイの色・拡大率・表示時間を変えます。上の行ほど高額向けの設定にしてください。</div>
+        <div id="yt-sc-tiers-list" class="yt-sc-tiers-list"></div>
+      </div>
+    </div>
+
+    <div class="app-section-title">バッジ・スタンプ設定（任意）</div>
+    <div class="app-card">
+      <div class="app-field">
+        <div class="app-grid-2">
+          <md-outlined-text-field id="yt-badge-first" label="初見バッジ" placeholder="例: 🔰初見"></md-outlined-text-field>
+          <md-outlined-text-field id="yt-badge-regular" label="常連バッジ" placeholder="例: ⭐常連"></md-outlined-text-field>
+        </div>
+      </div>
+      <div class="app-field">
+        <md-outlined-text-field
+          id="yt-badge-threshold"
+          class="full-width"
+          type="number"
+          label="常連と判定するコメント回数"
+          value="10" min="2" step="1">
+        </md-outlined-text-field>
+      </div>
+    </div>
+
+    <div class="app-section-title">OBS イベント連動</div>
+    <div class="app-card" id="obs-event-actions-card">
+      <div class="app-field app-stack-sm">
+        <div class="app-hint">スパチャ・メンバーシップ・キーワードで OBS ソースを一時表示。<strong>接続</strong>タブで WebSocket を設定してください。</div>
+        <div id="obs-event-rules-list" class="obs-event-rules-list empty">ルールがありません。「ルールを追加」から登録してください。</div>
+        <div class="app-row">
+          <md-outlined-button type="button" id="btn-obs-event-add">ルールを追加</md-outlined-button>
+        </div>
+      </div>
+    </div>
+
+    <details class="app-details app-details-section">
+      <summary>詳細設定（チャット取得 API）</summary>
+      <div class="app-card">
+        <div class="app-field">
+          <md-outlined-select id="yt-chat-source" class="full-width" label="取得方式">
+            <md-select-option value="auto" selected><div slot="headline">自動（既定）</div></md-select-option>
+            <md-select-option value="innertube"><div slot="headline">InnerTube</div></md-select-option>
+            <md-select-option value="dataapi"><div slot="headline">Data API v3 のみ</div></md-select-option>
+          </md-outlined-select>
+          <div class="app-hint" style="margin-top: 8px;">
+            <strong>自動</strong>：APIキーあり → Data API、なし → InnerTube（失敗時キーがあればフォールバック）<br>
+            <strong>InnerTube</strong>：APIキーがあっても InnerTube を使用（試験用）<br>
+            <strong>Data API</strong>：Google Data API v3 のみ（キー必須）
+          </div>
+          <div class="app-hint" id="yt-chat-backend-hint"></div>
+        </div>
+        <div class="app-field">
+          <md-outlined-text-field
+            id="yt-interval"
+            class="full-width"
+            type="number"
+            label="ポーリング間隔（ms）"
+            value="5000" min="5000" step="1000">
+          </md-outlined-text-field>
+          <div class="app-hint">通常は 5000ms のままで OK（短くすると API 制限に当たりやすくなります）</div>
+        </div>
+      </div>
+    </details>
+
+    <details class="app-details app-details-section">
+      <summary>個別 OBS URL（統合 URL を使う場合は不要）</summary>
+      <div class="app-card">
+        <div class="app-field app-stack-sm">
+          <div class="app-hint obs-suite-hint">
+            通常は統合 URL を使用。<a href="#" class="app-inline-link" id="yt-go-suite-obs">レイアウトへ</a>
+          </div>
+          <div class="app-label">YouTube 専用 URL</div>
+          <div class="url-row">
+            <md-outlined-text-field id="yt-obs-url" readonly></md-outlined-text-field>
+            <md-outlined-button id="yt-copy-url">コピー</md-outlined-button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <div class="app-fb" id="yt-fb"></div>
+  </div>
+
+  <!-- ===== アバタータブ ===== -->
+  <div class="tab-panel" id="panel-avatar">
+    <div class="app-section-title">表示人数・表示名</div>
+    <div class="app-card">
+      <div class="app-field">
+        <md-outlined-select id="av-display-mode" class="full-width" label="OBS に表示する人数">
+          <md-select-option value="both" selected><div slot="headline" id="av-mode-opt-both">2人表示</div></md-select-option>
+          <md-select-option value="p1"><div slot="headline" id="av-mode-opt-p1">1人目のみ</div></md-select-option>
+          <md-select-option value="p2"><div slot="headline" id="av-mode-opt-p2">2人目のみ</div></md-select-option>
+        </md-outlined-select>
+      </div>
+      <div class="app-field">
+        <div class="app-grid-2" id="av-label-grid">
+          <md-outlined-text-field id="av-p1-label" label="1人目の表示名"></md-outlined-text-field>
+          <md-outlined-text-field id="av-p2-label" label="2人目の表示名"></md-outlined-text-field>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-section-title">マイク設定</div>
+    <div class="app-card">
+      <div class="app-field app-stack-md">
+        <div>
+          <div class="app-label">マイク一覧</div>
+          <div class="app-desc">音量メーターで入力を確認してから、しきい値・感度を調整してください（マイク許可が必要です）</div>
+        </div>
+        <md-outlined-button type="button" id="av-scan-mics">
+          🎤 マイクをスキャン
+        </md-outlined-button>
+        <md-outlined-select id="av-mic-a" class="full-width" label="1人目のマイク">
+          <md-select-option value=""><div slot="headline">— 未選択 —</div></md-select-option>
+        </md-outlined-select>
+        <md-outlined-select id="av-mic-b" class="full-width" label="2人目のマイク">
+          <md-select-option value=""><div slot="headline">— 未選択 —</div></md-select-option>
+        </md-outlined-select>
+      </div>
+      <div class="app-field">
+        <div class="app-grid-2" id="av-mic-tune-grid">
+        <div class="av-mic-tune-col" id="av-mic-tune-p1">
+          <div class="app-label" id="av-mic-tune-label-p1">1人目 — 配信者A</div>
+          <div class="av-vu-wrap">
+            <div class="av-vu-track" aria-hidden="true"><div class="av-vu-bar" id="av-vu-p1"></div></div>
+            <span class="av-vu-val" id="av-vu-p1-val">0</span>
+          </div>
+          <div class="app-grid-2">
+            <md-outlined-text-field type="number" label="発話しきい値" data-f="p1_speakThreshold"
+              value="12" min="1" max="100" step="1"></md-outlined-text-field>
+            <md-outlined-text-field type="number" label="感度倍率" data-f="p1_sensitivity"
+              value="1.5" min="0.5" max="5" step="0.1"></md-outlined-text-field>
+          </div>
+        </div>
+        <div class="av-mic-tune-col" id="av-mic-tune-p2">
+          <div class="app-label" id="av-mic-tune-label-p2">2人目 — 配信者B</div>
+          <div class="av-vu-wrap">
+            <div class="av-vu-track" aria-hidden="true"><div class="av-vu-bar" id="av-vu-p2"></div></div>
+            <span class="av-vu-val" id="av-vu-p2-val">0</span>
+          </div>
+          <div class="app-grid-2">
+            <md-outlined-text-field type="number" label="発話しきい値" data-f="p2_speakThreshold"
+              value="12" min="1" max="100" step="1"></md-outlined-text-field>
+            <md-outlined-text-field type="number" label="感度倍率" data-f="p2_sensitivity"
+              value="1.5" min="0.5" max="5" step="0.1"></md-outlined-text-field>
+          </div>
+        </div>
+        </div>
+      </div>
+      <div class="app-field app-field-row">
+        <div class="app-label">サーバー状態</div>
+        <span class="app-badge is-warn" id="av-badge" role="status" aria-label="アバターサーバー状態">確認中...</span>
+      </div>
+    </div>
+
+    <div class="app-section-title">レイヤー・動き</div>
+    <p class="app-desc section-lead">画像と表示設定を分けて編集できます。</p>
+    <md-tabs id="av-adv-tabs">
+      <md-secondary-tab data-avtab="p1" active id="av-adv-tab-p1">1人目の設定</md-secondary-tab>
+      <md-secondary-tab data-avtab="p2" id="av-adv-tab-p2">2人目の設定</md-secondary-tab>
+    </md-tabs>
+    <div class="subtab-panel" data-avpanel="p1">
+      <div id="av-adv-p1"></div>
+    </div>
+    <div class="subtab-panel" data-avpanel="p2" style="display:none;">
+      <div id="av-adv-p2"></div>
+    </div>
+
+    <div class="app-section-title">笑い検出（任意・デフォルトOFF）</div>
+    <div class="app-card">
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">笑い検出を有効化</div>
+          <div class="app-desc">周波数と音量の変動から笑いを推定。一度検出したら約2.8秒は笑い顔を維持し、断続的な無音ではすぐ戻りません。誤検知が多い場合はOFFにしてください</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="av-smile-detect" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+      <div class="app-field">
+        <md-outlined-text-field
+          id="av-smile-sensitivity"
+          class="full-width"
+          type="number"
+          label="検出の厳しさ（10=敏感 … 90=鈍感）"
+          value="50" min="10" max="90" step="5">
+        </md-outlined-text-field>
+      </div>
+    </div>
+
+    <div class="app-section-title">プレビュー</div>
+    <div class="app-card">
+      <div class="app-field app-stack-sm">
+        <div>
+          <div class="app-label">プレビュー（ゆらぎ・追従・まばたき）</div>
+          <div class="app-hint">プレビューを開き、スライダーで口パク・笑いをシミュレートできます</div>
+        </div>
+        <md-outlined-button type="button" id="av-open-preview">プレビューを開く</md-outlined-button>
+      </div>
+    </div>
+
+    <details class="app-details app-details-section">
+      <summary>個別 OBS URL（全般の統合 URL を使う場合は不要）</summary>
+      <div class="app-card">
+        <div class="app-field app-stack-sm">
+          <div class="app-hint obs-suite-hint">
+            通常は統合 URL を使用。<a href="#" class="app-inline-link" id="av-go-suite-obs">レイアウトへ</a>
+          </div>
+          <div class="app-label">アバター専用 URL（単体配置用・幅・高さは OBS ソース側で指定）</div>
+          <div class="url-row">
+            <md-outlined-text-field id="av-obs-url" readonly></md-outlined-text-field>
+            <md-outlined-button id="av-copy-url">コピー</md-outlined-button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <div class="app-fb" id="av-fb"></div>
+  </div>
+</div>
+
+<script src="shared/avatar-constants.js"></script>
+<script src="shared/app-utils.js"></script>
+<script src="avatar-settings-bind.js"></script>
+<script src="settings/settings-core.js"></script>
+<script src="settings/settings-badges.js"></script>
+<script src="settings/settings-theme.js"></script>
+<script src="settings/settings-discord.js"></script>
+<script src="settings/settings-youtube.js"></script>
+<script src="settings/settings-youtube-oauth.js"></script>
+<script src="settings/settings-avatar.js"></script>
+<script src="settings/settings-integration.js"></script>
+<script src="settings/settings-obs-events.js"></script>
+<script src="settings/settings-checklist.js"></script>
+<script src="settings/settings-suite.js"></script>
+<script src="settings/settings-presets.js"></script>
+<script src="settings/settings-backup.js"></script>
+<script src="settings/settings-bootstrap.js"></script>
+</body>
+</html>

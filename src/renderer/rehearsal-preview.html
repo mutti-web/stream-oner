@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>StreamONER — リハーサルプレビュー</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: #1a1a22;
+    }
+    .rehearsal-badge {
+      position: fixed;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      padding: 6px 18px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fbbf24;
+      font: 600 15px/1.4 system-ui, sans-serif;
+      letter-spacing: 0.06em;
+      pointer-events: none;
+    }
+    .layer-host {
+      position: absolute;
+      pointer-events: none;
+    }
+    body.rehearsal-edit .layer-host {
+      pointer-events: auto;
+      cursor: move;
+    }
+    /* 編集時も iframe は表示したまま。操作は host が受け取る */
+    body.rehearsal-edit .layer-host .layer {
+      pointer-events: none;
+    }
+    .layer-host .layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+      pointer-events: none;
+    }
+    body.rehearsal-edit .layer-host.layer-selected {
+      box-shadow:
+        0 0 0 2px #fbbf24,
+        0 0 0 6px rgba(251, 191, 36, 0.22);
+    }
+    .layer-label {
+      display: none;
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      z-index: 6;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.72);
+      color: #fbbf24;
+      font: 700 13px/1.3 system-ui, sans-serif;
+      letter-spacing: 0.04em;
+      pointer-events: none;
+      user-select: none;
+    }
+    body.rehearsal-edit .layer-label {
+      display: block;
+    }
+    .layer-resize {
+      display: none;
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      width: 18px;
+      height: 18px;
+      background: #fbbf24;
+      border: 2px solid #1a1a22;
+      border-radius: 3px;
+      cursor: nwse-resize;
+      pointer-events: auto;
+      z-index: 7;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    }
+    body.rehearsal-edit .layer-resize {
+      display: block;
+    }
+    .rehearsal-toolbar {
+      position: fixed;
+      top: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 110;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.72);
+      border: 1px solid rgba(251, 191, 36, 0.35);
+    }
+    .rehearsal-mode-pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font: 700 14px/1.3 system-ui, sans-serif;
+      letter-spacing: 0.03em;
+      color: #e8e8ec;
+      background: rgba(255, 255, 255, 0.08);
+      white-space: nowrap;
+    }
+    body.rehearsal-edit .rehearsal-mode-pill {
+      color: #1a1a22;
+      background: #fbbf24;
+    }
+    .rehearsal-toolbar button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(251, 191, 36, 0.5);
+      background: rgba(0, 0, 0, 0.35);
+      color: #fbbf24;
+      font: 600 14px/1.4 system-ui, sans-serif;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .rehearsal-toolbar button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+    .rehearsal-toolbar-hint {
+      font: 500 13px/1.4 system-ui, sans-serif;
+      color: rgba(255, 255, 255, 0.72);
+      max-width: 280px;
+    }
+    /* SUITE_LAYOUT_INJECT */
+    #host-discord {
+      top: 12px; left: 12px;
+      width: 340px; height: 420px;
+    }
+    #host-youtube {
+      bottom: 12px; right: 12px;
+      width: 440px; height: 720px;
+    }
+    #host-avatar {
+      bottom: 0; left: 0;
+      width: 960px; height: 420px;
+    }
+    /* SUITE_LAYOUT_INJECT_END */
+  </style>
+</head>
+<body>
+  <div class="rehearsal-badge">REHEARSAL — モックコメント自動再生中</div>
+  <div class="rehearsal-toolbar">
+    <span class="rehearsal-mode-pill" id="rehearsal-mode-pill">プレビュー</span>
+    <button type="button" id="rehearsal-edit-toggle" aria-pressed="false">レイアウト編集を開始</button>
+    <button type="button" id="rehearsal-focus-settings" disabled>設定で編集</button>
+    <span class="rehearsal-toolbar-hint" id="rehearsal-toolbar-hint">本番と同じく OFF のパネルは非表示です</span>
+  </div>
+  <div class="layer-host" id="host-discord" data-panel="discord">
+    <span class="layer-label">Discord</span>
+    <iframe id="layer-discord" class="layer" title="Discord" src="http://127.0.0.1:3000/overlay"></iframe>
+    <span class="layer-resize" data-resize title="ドラッグでサイズ変更"></span>
+  </div>
+  <div class="layer-host" id="host-youtube" data-panel="youtube">
+    <span class="layer-label">YouTube チャット</span>
+    <iframe id="layer-youtube" class="layer" title="YouTube" src="http://127.0.0.1:3002/overlay"></iframe>
+    <span class="layer-resize" data-resize title="ドラッグでサイズ変更"></span>
+  </div>
+  <div class="layer-host" id="host-avatar" data-panel="avatar">
+    <span class="layer-label">アバター</span>
+    <iframe id="layer-avatar" class="layer" title="Avatar" src="http://127.0.0.1:3003/overlay"></iframe>
+    <span class="layer-resize" data-resize title="ドラッグでサイズ変更"></span>
+  </div>
+  <script src="/rehearsal-preview.js"></script>
+</body>
+</html>

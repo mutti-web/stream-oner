@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Discord RPC Overlay - OBS</title>
+  <link rel="stylesheet" href="discord-overlay.css">
+  <style id="custom-user-css"></style>
+  <script src="/shared/custom-css-loader.js"></script>
+</head>
+<body>
+
+<div id="user-list"></div>
+
+<script>
+const WS_URL = 'ws://127.0.0.1:3001';
+const SPEAKING_THROTTLE_MS = 100;
+const state  = { users: new Map() };
+const speakingLastDom = new Map();
+const $list  = document.getElementById('user-list');
+let ws = null;
+
+function connect() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  ws = new WebSocket(WS_URL);
+  ws.onmessage = (e) => { try { handle(JSON.parse(e.data)); } catch (_) {} };
+  ws.onclose   = () => {
+    ws = null;
+    setTimeout(connect, 3000);
+  };
+  ws.onerror   = () => {};
+}
+
+function handle(msg) {
+  switch (msg.type) {
+
+    case 'init':
+      state.users.clear(); $list.innerHTML = '';
+      (msg.users || []).forEach((u) => { state.users.set(u.id, u); $list.appendChild(createCard(u)); });
+      break;
+
+    case 'channel-update':
+      state.users.clear(); $list.innerHTML = '';
+      (msg.data.users || []).forEach((u) => { state.users.set(u.id, u); $list.appendChild(createCard(u)); });
+      break;
+
+    case 'voice-state-update': {
+      const { type, user } = msg.data;
+      if      (type === 'join')   { state.users.set(user.id, user); addCard(user); }
+      else if (type === 'update') { state.users.set(user.id, user); refreshCard(user); }
+      else if (type === 'leave')  { state.users.delete(user.id);    removeCard(user.id); }
+      break;
+    }
+
+    case 'speaking-update': {
+      const { userId, speaking } = msg.data;
+      const user = state.users.get(userId);
+      if (user) user.speaking = speaking;
+      const now = Date.now();
+      const last = speakingLastDom.get(userId) || 0;
+      if (now - last < SPEAKING_THROTTLE_MS) break;
+      speakingLastDom.set(userId, now);
+      const card = document.getElementById(`u-${userId}`);
+      if (card) card.classList.toggle('speaking', speaking);
+      break;
+    }
+  }
+}
+
+function createCard(user) {
+  const div = document.createElement('div');
+  div.className = `user-card${user.speaking ? ' speaking' : ''}`;
+  div.id = `u-${user.id}`;
+  div.innerHTML = buildHTML(user);
+  return div;
+}
+
+function buildHTML(user) {
+  const initial = (user.globalName || user.username || '?')[0].toUpperCase();
+  const hue     = strToHue(user.id);
+  const src     = user.avatar || '';
+  const inner   = src
+    ? `<img src="${esc(src)}" alt="" onerror="this.style.display='none'">`
+    : `<div class="avatar-initial" style="background:hsl(${hue},55%,38%)">${esc(initial)}</div>`;
+  return `
+    <div class="avatar">${inner}</div>
+    <span class="username">${esc(user.globalName || user.username)}</span>
+  `;
+}
+
+function addCard(user) {
+  const card = createCard(user);
+  card.classList.add('entering');
+  $list.appendChild(card);
+  card.addEventListener('animationend', () => card.classList.remove('entering'), { once: true });
+}
+
+function refreshCard(user) {
+  const card = document.getElementById(`u-${user.id}`);
+  if (!card) { addCard(user); return; }
+  const wasSpeaking = card.classList.contains('speaking');
+  card.innerHTML = buildHTML(user);
+  card.className = `user-card${wasSpeaking ? ' speaking' : ''}`;
+}
+
+function removeCard(userId) {
+  const card = document.getElementById(`u-${userId}`);
+  if (!card) return;
+  card.classList.add('leaving');
+  card.addEventListener('animationend', () => card.remove(), { once: true });
+}
+
+function esc(s) {
+  if (typeof s !== 'string') return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function strToHue(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = s.charCodeAt(i) + ((h << 5) - h);
+  return ((h % 360) + 360) % 360;
+}
+
+connect();
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) connect();
+});
+</script>
+</body>
+</html>

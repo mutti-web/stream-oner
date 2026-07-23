@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>StreamONER — Combined OBS</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* OBS ブラウザソースは 1920×1080（16:9）推奨。キャンバスを固定し座標がずれないようにする */
+    html, body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: transparent;
+    }
+    .layer {
+      position: absolute;
+      border: none;
+      background: transparent;
+      pointer-events: none;
+    }
+    /* キャンバス 1920×1080（16:9）。配置は設定「全般」→ 統合 OBS レイアウト（自動注入） */
+    /* SUITE_LAYOUT_INJECT */
+    #layer-discord {
+      top: 12px; left: 12px;
+      width: 340px; height: 420px;
+    }
+    #layer-youtube {
+      bottom: 12px; right: 12px;
+      width: 440px; height: 720px;
+    }
+    #layer-avatar {
+      bottom: 0; left: 0;
+      width: 960px; height: 420px;
+    }
+    /* SUITE_LAYOUT_INJECT_END */
+  </style>
+</head>
+<body>
+  <iframe id="layer-discord" class="layer" title="Discord" src="http://127.0.0.1:3000/overlay"></iframe>
+  <iframe id="layer-youtube" class="layer" title="YouTube" src="http://127.0.0.1:3002/overlay"></iframe>
+  <iframe id="layer-avatar" class="layer" title="Avatar" src="http://127.0.0.1:3003/overlay"></iframe>
+  <script>
+    (function () {
+      const layers = {
+        discordEnabled: document.getElementById('layer-discord'),
+        youtubeEnabled: document.getElementById('layer-youtube'),
+        avatarEnabled: document.getElementById('layer-avatar'),
+      };
+
+      function applyFlags(flags) {
+        if (!flags || typeof flags !== 'object') return;
+        Object.entries(layers).forEach(([key, el]) => {
+          if (!el || flags[key] === undefined) return;
+          el.style.display = flags[key] ? '' : 'none';
+        });
+      }
+
+      async function refreshFlags() {
+        try {
+          const res = await fetch(`/suite-flags?t=${Date.now()}`, { cache: 'no-store' });
+          if (!res.ok) return;
+          const flags = await res.json();
+          applyFlags(flags);
+        } catch (_) {
+          // OBS 側で一時的に取得失敗しても次の周期で再試行する
+        }
+      }
+
+      refreshFlags();
+      setInterval(refreshFlags, 1000);
+    })();
+  </script>
+</body>
+</html>

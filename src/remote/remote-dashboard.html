@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="system" data-accent="default">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#131316" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' ws: wss:; font-src 'self'; media-src 'self';" />
+  <title>スマホダッシュボード — StreamONER</title>
+  <link rel="icon" href="/assets/icon.ico" type="image/x-icon" />
+  <script src="/shared/theme-apply.js"></script>
+  <link rel="stylesheet" href="/shared/theme.css" />
+  <script type="module" src="/shared/material/bundle.js"></script>
+  <script src="/shared/ui-helpers.js"></script>
+  <script src="/shared/app-state-ui.js"></script>
+  <script src="/shared/status-indicator.js"></script>
+  <script src="/shared/dashboard-controls.js"></script>
+  <link rel="stylesheet" href="/remote.css" />
+</head>
+<body>
+  <div id="login-screen" class="screen login-screen">
+    <h1>スマホダッシュボード</h1>
+    <p class="hint">同じ Wi‑Fi 内のスマホから配信操作します。PIN は PC の設定で確認できます。</p>
+    <form id="login-form" class="login-form" autocomplete="on">
+      <label class="field">
+        <span>端末名（任意）</span>
+        <input
+          id="inp-device-label"
+          name="username"
+          type="text"
+          placeholder="例: マイスマホ"
+          maxlength="32"
+          autocomplete="username"
+        />
+      </label>
+      <label class="field">
+        <span>PIN</span>
+        <input
+          id="inp-pin"
+          name="password"
+          type="password"
+          inputmode="numeric"
+          autocomplete="current-password"
+          maxlength="12"
+        />
+      </label>
+      <p id="login-error" class="error" hidden></p>
+      <button id="btn-login" type="submit" class="btn primary">ログイン</button>
+    </form>
+  </div>
+
+  <div id="app-screen" class="app-shell" hidden>
+    <header class="top-bar">
+      <div class="top-lamps" aria-label="配信表示の接続状態">
+        <span id="lamp-discord" class="status-indicator is-off" role="status" aria-label="Discord 状態" hidden></span>
+        <span id="lamp-youtube" class="status-indicator is-off" role="status" aria-label="チャット 状態" hidden></span>
+        <span id="lamp-avatar" class="status-indicator is-off" role="status" aria-label="アバター 状態" hidden></span>
+      </div>
+      <div class="top-onair">
+        <span class="onair-lbl" id="onair-lbl">ON AIR</span>
+        <span id="onair-time" class="onair-time">00:00:00</span>
+      </div>
+      <div id="top-menu-wrap" class="top-menu-wrap">
+        <button
+          id="btn-top-menu"
+          type="button"
+          class="top-icon-btn"
+          aria-label="メニュー"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          aria-controls="top-menu-panel"
+          title="メニュー"
+        >
+          <md-icon>more_vert</md-icon>
+        </button>
+        <div id="top-menu-panel" class="top-menu-panel" role="menu" hidden>
+          <button type="button" class="top-menu-item" data-open-sheet="suite" role="menuitem">
+            <md-icon>visibility</md-icon>
+            <span>配信表示</span>
+          </button>
+          <button type="button" class="top-menu-item" data-open-sheet="pins" role="menuitem">
+            <md-icon>push_pin</md-icon>
+            <span>ピン留め</span>
+            <span id="menu-pin-badge" class="menu-badge" hidden></span>
+          </button>
+          <button type="button" class="top-menu-item" data-open-sheet="session" role="menuitem">
+            <md-icon>edit_note</md-icon>
+            <span>セッションログ</span>
+            <span id="menu-session-badge" class="menu-badge menu-badge-dot" hidden aria-label="記録中">●</span>
+          </button>
+          <button type="button" class="top-menu-item" data-open-sheet="obs" role="menuitem">
+            <md-icon>link</md-icon>
+            <span>OBS に接続</span>
+          </button>
+          <div class="top-menu-divider" role="separator"></div>
+          <button type="button" id="btn-logout" class="top-menu-item top-menu-item-danger" role="menuitem">
+            <md-icon>logout</md-icon>
+            <span>ログアウト</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="tab-panels">
+      <div id="tab-remote" class="tab-panel is-active" role="tabpanel" aria-label="リモコン">
+        <div class="remote-scroll">
+          <section class="remote-block" aria-label="チャット取得">
+            <h2>チャット取得</h2>
+            <div class="remote-yt-row">
+              <span id="yt-badge" class="app-badge yt-status-compact" role="status" aria-label="チャット取得状態">停止中</span>
+              <button id="btn-yt-toggle" type="button" class="btn hero-action primary">開始</button>
+            </div>
+          </section>
+
+          <section class="remote-block" aria-label="OBSシーン">
+            <h2>シーン</h2>
+            <select id="sel-scene" class="hero-select" aria-label="OBS シーン"></select>
+            <p id="obs-hint" class="obs-hint" hidden>⋮ メニューから OBS に接続してください。</p>
+          </section>
+
+          <section class="remote-hero" aria-label="マイクミュート">
+            <md-filled-tonal-button type="button" class="hero-mute btn-mute" data-slot="p1" id="btn-mute-p1">
+              <md-icon slot="icon">mic</md-icon>
+              <span id="mute-lbl-p1">1人目</span>
+            </md-filled-tonal-button>
+            <md-filled-tonal-button type="button" class="hero-mute btn-mute" data-slot="p2" id="btn-mute-p2">
+              <md-icon slot="icon">mic</md-icon>
+              <span id="mute-lbl-p2">2人目</span>
+            </md-filled-tonal-button>
+          </section>
+        </div>
+      </div>
+
+      <div id="tab-chat" class="tab-panel" role="tabpanel" aria-label="チャット" hidden>
+        <div id="chat-list" class="chat-scroll" role="list" aria-label="ライブチャット"></div>
+      </div>
+    </main>
+
+    <nav class="bottom-nav" aria-label="タブ切替">
+      <button type="button" class="bottom-nav-btn is-active" data-tab="remote" aria-selected="true">
+        <md-icon>tune</md-icon>
+        <span>リモコン</span>
+      </button>
+      <button type="button" class="bottom-nav-btn" data-tab="chat" aria-selected="false">
+        <md-icon>chat</md-icon>
+        <span>チャット</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ⋮ メニュー用シート -->
+  <div id="util-sheet-overlay" class="sheet-overlay" hidden>
+    <div class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="util-sheet-title">
+      <div class="sheet-header">
+        <h2 id="util-sheet-title" class="sheet-title">メニュー</h2>
+        <button type="button" id="util-sheet-close" class="sheet-close-btn" aria-label="閉じる">
+          <md-icon>close</md-icon>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <div id="sheet-suite" class="sheet-pane" hidden>
+          <div class="suite-toggles">
+            <label class="suite-item">
+              <span class="suite-item-name">Discord</span>
+              <md-switch id="sw-discord" icons show-only-selected-icon></md-switch>
+            </label>
+            <label class="suite-item">
+              <span class="suite-item-name">チャット</span>
+              <md-switch id="sw-youtube" icons show-only-selected-icon></md-switch>
+            </label>
+            <label class="suite-item">
+              <span class="suite-item-name">アバター</span>
+              <md-switch id="sw-avatar" icons show-only-selected-icon></md-switch>
+            </label>
+          </div>
+        </div>
+        <div id="sheet-pins" class="sheet-pane" hidden>
+          <div id="pin-panel" class="pin-sheet-list empty">ピン留めはありません</div>
+        </div>
+        <div id="sheet-session" class="sheet-pane" hidden>
+          <div class="session-log-head">
+            <span class="session-log-status" id="session-log-status">停止中</span>
+          </div>
+          <div class="session-log-btns">
+            <button id="btn-session-start" type="button" class="btn hero-action">記録開始</button>
+            <button id="btn-session-end" type="button" class="btn hero-action" disabled>記録終了</button>
+          </div>
+          <p class="session-log-hint">記録中はチャットの行をタップし「ハイライトに追加」を選べます。</p>
+          <div id="session-highlights" class="session-highlights empty">記録終了後にハイライトと URL が表示されます</div>
+        </div>
+        <div id="sheet-obs" class="sheet-pane" hidden>
+          <p id="obs-sheet-status" class="obs-sheet-status">状態を確認中…</p>
+          <button id="btn-obs-connect" type="button" class="btn hero-action primary obs-sheet-connect">OBS に接続</button>
+          <p class="session-log-hint">OBS の WebSocket を有効にし、PC の設定でパスワードを保存してください。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- チャット行タップ用アクションシート -->
+  <div id="action-sheet-overlay" class="sheet-overlay" hidden>
+    <div class="bottom-sheet action-sheet" role="dialog" aria-modal="true" aria-labelledby="action-sheet-title">
+      <div class="sheet-header">
+        <h2 id="action-sheet-title" class="sheet-title">コメント操作</h2>
+        <button type="button" id="action-sheet-close" class="sheet-close-btn" aria-label="閉じる">
+          <md-icon>close</md-icon>
+        </button>
+      </div>
+      <div id="action-sheet-preview" class="action-sheet-preview"></div>
+      <div class="action-sheet-btns">
+        <button type="button" id="action-pin" class="btn sheet-action-btn" hidden>ピン留め</button>
+        <button type="button" id="action-unpin" class="btn sheet-action-btn" hidden>ピン解除</button>
+        <button type="button" id="action-highlight" class="btn sheet-action-btn" hidden>ハイライトに追加</button>
+        <button type="button" id="action-ng-user" class="btn sheet-action-btn sheet-action-danger" hidden>NGユーザーに追加</button>
+        <button type="button" id="action-cancel" class="btn sheet-action-btn sheet-action-muted">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="yt-start-sheet-overlay" class="sheet-overlay" hidden>
+    <div class="bottom-sheet" role="dialog" aria-modal="true" aria-labelledby="yt-start-sheet-title">
+      <div class="sheet-header">
+        <h2 id="yt-start-sheet-title" class="sheet-title">チャット取得</h2>
+        <button type="button" id="yt-start-sheet-close" class="sheet-close-btn" aria-label="閉じる">
+          <md-icon>close</md-icon>
+        </button>
+      </div>
+      <div class="sheet-body">
+        <p id="yt-start-sheet-body" class="yt-start-sheet-body"></p>
+        <div id="yt-start-pick-list" class="yt-start-pick-list" hidden></div>
+        <label id="yt-start-nudge-dismiss-wrap" class="yt-start-nudge-dismiss" hidden>
+          <input type="checkbox" id="yt-start-nudge-dismiss" />
+          今後この案内を表示しない
+        </label>
+        <div id="yt-start-sheet-actions" class="yt-start-sheet-actions"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="actor-toast" class="actor-toast" hidden role="status" aria-live="polite"></div>
+
+  <script src="/shared/youtube-chat-start-flow.js"></script>
+  <script src="/remote-yt-start-ui.js"></script>
+  <script src="/remote-app.js"></script>
+</body>
+</html>

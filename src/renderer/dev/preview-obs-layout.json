@@ -1,0 +1,23 @@
+{
+  "discord": {
+    "anchor": "top-left",
+    "offsetX": 114,
+    "offsetY": 63,
+    "widthPx": 351,
+    "heightPx": 396
+  },
+  "youtube": {
+    "anchor": "bottom-right",
+    "offsetX": 166,
+    "offsetY": 359,
+    "widthPx": 416,
+    "heightPx": 679
+  },
+  "avatar": {
+    "anchor": "bottom-left",
+    "offsetX": 0,
+    "offsetY": 54,
+    "widthPx": 960,
+    "heightPx": 420
+  }
+}

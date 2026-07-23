@@ -1,0 +1,81 @@
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+    #stage {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      width: 100%; height: 100%; padding: 0 24px 12px; gap: 16px;
+    }
+    .avatar-slot {
+      flex: 1; max-width: 48%; display: flex; flex-direction: column;
+      align-items: center; gap: 6px;
+      transition: opacity 0.35s ease;
+    }
+    .avatar-slot.left { align-items: flex-start; }
+    .avatar-slot.right { align-items: flex-end; }
+    /* 無音時の透明度は JS で style.opacity を指定（0〜1） */
+    .avatar-slot.slot-off { display: none !important; }
+    #stage.mode-p1 { justify-content: flex-start; }
+    #stage.mode-p1 .avatar-slot.left { max-width: min(520px, 90%); }
+    #stage.mode-p2 { justify-content: flex-end; }
+    #stage.mode-p2 .avatar-slot.right { max-width: min(520px, 90%); }
+    .avatar-body {
+      position: relative; width: min(280px, 42vw); aspect-ratio: 1 / 1.1;
+      transform-origin: center center;
+    }
+    .layer-root {
+      position: absolute; inset: 0;
+    }
+    .layer-rig {
+      position: absolute; inset: 0;
+      transform-origin: center bottom;
+    }
+    .layer-attach {
+      position: absolute; inset: 0;
+      transform-origin: center center;
+    }
+    .layer-img {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: contain; object-position: center bottom;
+      transform-origin: center bottom;
+      pointer-events: none;
+    }
+    /* 影は身体・顔・髪のみ（目・口・鼻は attach 側のため影を付けると顔に落ちる） */
+    .layer-rig > .layer-img[data-layer="body"],
+    .layer-rig > .layer-img[data-layer="face"],
+    .layer-rig > .layer-img[data-layer="hair1"],
+    .layer-rig > .layer-img[data-layer="hair2"] {
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,.45));
+    }
+    /* 発話時の口の膨らみは中心拡大（下基準だと口だけ上に跳ねる） */
+    .layer-img[data-layer="mouth"] {
+      transform-origin: center center;
+    }
+    /* z-index は設定の「描画順」で上書き（既定: 身体10 → 顔15 → 髪1:20 → 目30 → 口40 → 鼻42 → 髪2:50） */
+    .composite-img {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: contain; object-position: center bottom;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,.45));
+      transform-origin: center center;
+    }
+    .mouth-bar {
+      position: absolute; bottom: 18%; left: 50%; width: 28%; height: 6%;
+      background: rgba(30,20,20,.85); border-radius: 999px;
+      transform: translateX(-50%); opacity: 0.35; z-index: 6;
+    }
+    .avatar-slot.speaking .mouth-bar { transform: translateX(-50%) scaleY(2.2); opacity: 0.95; }
+    .avatar-slot.has-layers .mouth-bar { display: none; }
+
+    /* プレビュー窓（?preview=1）のみ */
+    body.preview-mode .avatar-label {
+      font-size: 13px; font-weight: 700; color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,.85);
+    }
+    body.preview-mode .placeholder {
+      width: 72%; aspect-ratio: 1; border-radius: 50% 50% 42% 42%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 48px; font-weight: 800; color: #fff;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    }
+    body.preview-mode .placeholder.p1 { background: linear-gradient(160deg, #5865f2, #3c45a5); }
+    body.preview-mode .placeholder.p2 { background: linear-gradient(160deg, #ed4245, #9b2c2e); }

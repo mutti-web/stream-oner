@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>アバタープレビュー</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1e1f22; color: #dbdee1; height: 100vh;
+      display: flex; flex-direction: column;
+    }
+    header {
+      padding: 10px 14px; border-bottom: 1px solid #3f4147;
+      font-size: 14px; font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <header>アバタープレビュー — テスト信号（実マイクより優先）</header>
+  <div style="display:flex;flex:1;min-height:0;">
+    <iframe id="frame" src="/overlay?preview=1" style="flex:1;border:none;background:#111;"></iframe>
+    <aside style="width:280px;padding:12px;border-left:1px solid #3f4147;overflow:auto;font-size:12px;">
+      <p style="color:#949ba4;margin-bottom:12px;">
+        この窓を開いている間、右の操作がオーバーレイに送られ実マイクより優先されます。
+        音量＝揺れの強さ、発話中＝口を開いたまま、笑い＝笑い顔のまま。設定保存で素材が反映されます。
+      </p>
+      <section style="margin-bottom:16px;">
+        <div style="font-weight:700;margin-bottom:8px;">配信者A（左）</div>
+        <label>音量 <input type="range" id="p1-vol" min="0" max="100" value="0" style="width:100%;" /></label>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+          <input type="checkbox" id="p1-speak" /> 発話中
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          <input type="checkbox" id="p1-laugh" /> 笑い
+        </label>
+      </section>
+      <section>
+        <div style="font-weight:700;margin-bottom:8px;">配信者B（右）</div>
+        <label>音量 <input type="range" id="p2-vol" min="0" max="100" value="0" style="width:100%;" /></label>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+          <input type="checkbox" id="p2-speak" /> 発話中
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          <input type="checkbox" id="p2-laugh" /> 笑い
+        </label>
+      </section>
+    </aside>
+  </div>
+<script>
+const WS_URL = 'ws://' + location.host;
+let ws;
+
+function connect() {
+  ws = new WebSocket(WS_URL);
+  ws.onclose = () => setTimeout(connect, 800);
+}
+
+function send() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({
+    type: 'preview-audio',
+    p1: Number(document.getElementById('p1-vol').value),
+    p2: Number(document.getElementById('p2-vol').value),
+    p1Speaking: document.getElementById('p1-speak').checked,
+    p2Speaking: document.getElementById('p2-speak').checked,
+    p1Laughing: document.getElementById('p1-laugh').checked,
+    p2Laughing: document.getElementById('p2-laugh').checked,
+  }));
+}
+
+['p1-vol', 'p2-vol', 'p1-speak', 'p2-speak', 'p1-laugh', 'p2-laugh'].forEach((id) => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', send);
+  el.addEventListener('change', send);
+});
+
+connect();
+setInterval(send, 80);
+</script>
+</body>
+</html>

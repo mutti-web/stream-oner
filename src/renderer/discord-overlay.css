@@ -1,0 +1,143 @@
+/*
+ * ============================================================
+ * カスタマイズ可能な変数一覧
+ *
+ * --speaking-color  : 発話中のリング・名前テキスト色
+ * --speaking-glow   : 発話中のリングのぼかし色（薄くすると落ち着く）
+ * --overlay-bg      : カード背景色
+ * --text-normal     : 通常時の名前テキスト色
+ * --text-speaking   : 発話中の名前テキスト色
+ * --name-bg         : 名前の背景色
+ * --name-bg-speaking: 発話中の名前背景色
+ * --avatar-size     : アバターサイズ
+ * --radius          : カードの角の丸み
+ *
+ * 例（落ち着いたリング）:
+ *   --speaking-color: #2d7a4f;
+ *   --speaking-glow:  rgba(35, 165, 90, 0.2);
+ * ============================================================
+ */
+:root {
+  --speaking-color:   #23a55a;
+  --speaking-glow:    rgba(35, 165, 90, 0.35);
+  --overlay-bg:       rgba(18, 18, 24, 0.85);
+  --text-normal:      rgba(255, 255, 255, 0.75);
+  --text-speaking:    #ffffff;
+  --name-bg:          rgba(0, 0, 0, 0.45);
+  --name-bg-speaking: rgba(35, 165, 90, 0.25);
+  --avatar-size:      40px;
+  --font:             -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius:           12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  background: transparent !important;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+}
+
+/* ============================================================
+   ユーザーカード
+   - 背景は常に同じ（アニメーションなし）
+   - ボーダーのみ発話中に変化
+============================================================ */
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px 6px 6px;
+  background: var(--overlay-bg); /* 常に固定 */
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  -webkit-app-region: drag;
+  cursor: default;
+  transition: border-color 0.15s ease;
+}
+
+/* 発話中: ボーダーのみ変化（背景は変えない）*/
+.user-card.speaking {
+  border-color: var(--speaking-color);
+}
+
+.user-card.entering { animation: fadeIn  0.22s ease forwards; }
+.user-card.leaving  { animation: fadeOut 0.18s ease forwards; pointer-events: none; }
+
+@keyframes fadeIn  { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-4px); } }
+
+/* ============================================================
+   アバター
+============================================================ */
+.avatar {
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  border-radius: 50%;
+  border: 2px solid transparent;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(88, 101, 242, 0.3);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.user-card.speaking .avatar {
+  border-color: var(--speaking-color);
+  box-shadow: 0 0 0 2px var(--speaking-glow);
+  transform: scale(1.06);
+}
+
+.avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-initial {
+  font-family: var(--font);
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+/* ============================================================
+   ユーザー名（背景付き）
+============================================================ */
+.username {
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  /* 名前の背景 */
+  background: var(--name-bg);
+  padding: 2px 8px;
+  border-radius: 6px;
+
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+/* 発話中: 名前テキストと背景を変化 */
+.user-card.speaking .username {
+  color: var(--text-speaking);
+  background: var(--name-bg-speaking);
+}

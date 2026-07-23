@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="system" data-accent="default">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' 'unsafe-inline'; img-src 'self' https: data:; media-src 'self';" />
+  <title>StreamONER - ダッシュボード</title>
+  <script src="shared/theme-apply.js"></script>
+  <link rel="stylesheet" href="shared/theme.css" />
+  <script src="shared/ui-helpers.js"></script>
+  <script type="module" src="shared/material/bundle.js"></script>
+  <script src="shared/app-state-ui.js"></script>
+  <script src="shared/status-indicator.js"></script>
+  <script src="shared/dashboard-controls.js"></script>
+  <script src="shared/youtube-chat-start-flow.js"></script>
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+
+  <header class="dash-header">
+    <div class="header-top">
+      <div class="header-nav-left">
+        <div class="header-title-wrap">
+          <img class="header-logo-img" src="../../assets/icon.ico" alt="" />
+          <div class="header-title">ダッシュボード</div>
+        </div>
+        <div class="header-nav-buttons">
+          <md-outlined-button id="btn-open-settings" title="設定ウィンドウを開く">
+            <md-icon slot="icon">settings</md-icon>
+            設定
+          </md-outlined-button>
+          <md-outlined-button id="btn-open-rehearsal" title="統合レイアウトのリハーサルプレビュー">
+            <md-icon slot="icon">play_circle</md-icon>
+            リハーサル
+          </md-outlined-button>
+        </div>
+      </div>
+      <div class="header-status-right">
+        <div class="dash-header-lamps" aria-label="接続・配信状態">
+          <div class="dash-lamp-group" title="配信表示の接続状態">
+            <span id="lamp-discord" class="status-indicator is-off" role="status" aria-label="Discord 状態" hidden></span>
+            <span id="lamp-youtube" class="status-indicator is-off" role="status" aria-label="チャット 状態" hidden></span>
+            <span id="lamp-avatar" class="status-indicator is-off" role="status" aria-label="アバター 状態" hidden></span>
+          </div>
+          <span class="dash-lamp-divider" aria-hidden="true"></span>
+          <div class="dash-lamp-group" title="OBS の接続・出力状態">
+            <span id="lamp-obs-conn" class="status-chip is-off" role="status" aria-label="OBS 接続"></span>
+            <span id="lamp-obs-stream" class="status-chip is-off" role="status" aria-label="配信状態"></span>
+            <span id="lamp-obs-record" class="status-chip is-off" role="status" aria-label="録画状態"></span>
+          </div>
+        </div>
+        <div class="dash-time-block" aria-label="配信時間と現在時刻">
+          <div class="dash-time-row">
+            <span id="dash-onair-lbl" class="dash-time-lbl">ON AIR</span>
+            <span id="dash-broadcast-timer" class="dash-time-value" title="OBS 配信中は WebSocket の経過時間、それ以外はチャット取得の経過時間">00:00:00</span>
+          </div>
+          <div class="dash-time-row">
+            <span class="dash-time-lbl">TIME</span>
+            <span id="dash-clock" class="dash-time-value dash-time-clock" title="現在時刻（PCのローカル）">00:00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav
+    class="dash-action-bar"
+    id="dash-action-bar"
+    aria-label="配信操作"
+    title="ミュート・シーン・チャット取得・配信表示の ON/OFF はここで操作します（設定と同期）。"
+  >
+    <div class="dash-action-group dash-action-emergency">
+      <span class="dash-action-label">緊急</span>
+      <div id="dash-mute-inline" class="dash-mute-inline" hidden title="OBS マイクミュート（ソースは「マイク設定」で割り当て）">
+        <md-filled-tonal-button type="button" id="btn-obs-mute-p1" class="btn-mute-bar">
+          <md-icon slot="icon">mic</md-icon>
+          <span id="dash-mute-label-p1">1人目</span>
+        </md-filled-tonal-button>
+        <md-filled-tonal-button type="button" id="btn-obs-mute-p2" class="btn-mute-bar">
+          <md-icon slot="icon">mic</md-icon>
+          <span id="dash-mute-label-p2">2人目</span>
+        </md-filled-tonal-button>
+      </div>
+      <div class="dash-obs-scene-wrap">
+        <md-outlined-select id="dash-obs-scene" class="dash-obs-scene-select" label="シーン">
+          <md-select-option value=""><div slot="headline">—</div></md-select-option>
+        </md-outlined-select>
+      </div>
+    </div>
+
+    <div
+      class="dash-action-group dash-action-yt"
+      title="「チャット」ON でも、ここで開始するまでコメントは流れません。動画 ID は設定のチャットタブとも同期します。"
+    >
+      <span class="dash-action-label">取得</span>
+      <span id="yt-status" class="app-badge yt-status-compact" role="status" aria-label="チャット取得状態">停止</span>
+      <md-filled-button type="button" id="btn-toggle-yt" class="btn-yt-compact">
+        <md-icon slot="icon">play_arrow</md-icon>
+        開始
+      </md-filled-button>
+      <details class="dash-yt-video-details" id="dash-yt-video-details">
+        <summary id="dash-yt-video-summary">動画ID</summary>
+        <div class="dash-yt-video-pop">
+          <md-outlined-text-field id="dash-yt-video-id" label="動画ID" placeholder="例: dQw4w9WgXcQ"></md-outlined-text-field>
+          <md-outlined-button type="button" id="dash-yt-video-save">反映</md-outlined-button>
+        </div>
+      </details>
+    </div>
+
+    <div class="dash-action-group dash-action-obs">
+      <span class="dash-action-label">OBS</span>
+      <md-outlined-button type="button" id="btn-obs-connect">接続</md-outlined-button>
+      <details class="dash-obs-mic-details" id="dash-obs-mic-details">
+        <summary>マイク設定</summary>
+        <div class="dash-obs-mic-pop">
+          <div id="dash-obs-connected-wrap" class="dash-obs-mic-body" hidden>
+            <div class="dash-obs-mic-head">
+              <span class="dash-obs-field-lbl">マイクソース</span>
+              <md-text-button type="button" id="btn-obs-refresh-inputs">ソース更新</md-text-button>
+            </div>
+            <div class="obs-mic-row" id="obs-mic-row-p1">
+              <div class="obs-mic-src-row">
+                <span class="obs-mic-slot-lbl" id="dash-obs-mic-label-p1">1人目</span>
+                <span class="obs-mic-src-name" id="obs-mic-src-display-p1">— 未選択 —</span>
+              </div>
+              <div id="obs-mic-edit-p1" class="obs-mic-edit" hidden>
+                <md-outlined-select id="dash-obs-mic-p1" class="obs-mic-select" label="マイクソース">
+                  <md-select-option value=""><div slot="headline">— 未選択 —</div></md-select-option>
+                </md-outlined-select>
+              </div>
+              <md-text-button type="button" id="btn-obs-mic-edit-p1" class="obs-mic-edit-toggle" hidden>変更</md-text-button>
+            </div>
+            <div class="obs-mic-row" id="obs-mic-row-p2">
+              <div class="obs-mic-src-row">
+                <span class="obs-mic-slot-lbl" id="dash-obs-mic-label-p2">2人目</span>
+                <span class="obs-mic-src-name" id="obs-mic-src-display-p2">— 未選択 —</span>
+              </div>
+              <div id="obs-mic-edit-p2" class="obs-mic-edit" hidden>
+                <md-outlined-select id="dash-obs-mic-p2" class="obs-mic-select" label="マイクソース">
+                  <md-select-option value=""><div slot="headline">— 未選択 —</div></md-select-option>
+                </md-outlined-select>
+              </div>
+              <md-text-button type="button" id="btn-obs-mic-edit-p2" class="obs-mic-edit-toggle" hidden>変更</md-text-button>
+            </div>
+          </div>
+        </div>
+      </details>
+      <p id="dash-obs-setup-hint" class="dash-obs-setup-hint">
+        未接続です。設定の「OBS連携 → 詳細設定」から接続を設定し、「接続」で接続してください。
+      </p>
+      <span id="dash-obs-error" class="dash-obs-error" hidden></span>
+    </div>
+
+    <div class="dash-action-group dash-action-suite">
+      <span class="dash-action-label">表示</span>
+      <label class="dash-suite-lbl">
+        <span class="dash-suite-name">Discord</span>
+        <md-switch id="dash-suite-dc" icons show-only-selected-icon></md-switch>
+      </label>
+      <label class="dash-suite-lbl">
+        <span class="dash-suite-name">チャット</span>
+        <md-switch id="dash-suite-yt" icons show-only-selected-icon></md-switch>
+      </label>
+      <label class="dash-suite-lbl">
+        <span class="dash-suite-name">アバター</span>
+        <md-switch id="dash-suite-av" icons show-only-selected-icon></md-switch>
+      </label>
+    </div>
+  </nav>
+
+  <div class="main-container">
+    <div class="chat-pane">
+      <div id="superchat-area" class="superchat-area"></div>
+      <div id="chat-list" class="chat-list"></div>
+    </div>
+
+    <div class="side-pane">
+      <details class="pin-section" id="pin-section">
+        <summary class="pin-summary">
+          <span class="pin-title">
+            <md-icon>push_pin</md-icon>
+            OBS ピン留め
+          </span>
+          <span id="pin-count" class="pin-count">0件</span>
+        </summary>
+        <div class="pin-section-body">
+          <div id="pin-panel" class="pin-panel empty">ピン留め中のコメントはありません</div>
+        </div>
+      </details>
+
+      <details class="session-log-section" id="session-log-section">
+        <summary class="session-log-summary">
+          <span class="session-log-title">セッションログ</span>
+          <span id="session-log-status" class="session-log-status">停止中</span>
+        </summary>
+        <div class="session-log-body">
+          <div class="session-log-controls">
+            <md-outlined-button type="button" id="btn-session-log-start">記録開始</md-outlined-button>
+            <md-outlined-button type="button" id="btn-session-log-end">記録終了</md-outlined-button>
+          </div>
+          <div id="session-log-highlights" class="session-log-highlights empty">セッション終了後にハイライトと URL が表示されます</div>
+        </div>
+      </details>
+
+      <details class="participant-section" id="participant-section">
+        <summary class="participant-summary">
+          <span class="participant-title">参加者一覧</span>
+          <span id="participant-count" class="participant-count">0人</span>
+        </summary>
+        <div class="participant-body">
+          <md-text-button type="button" id="btn-clear-session" class="full-width dash-clear-session">
+            この配信の一覧をリセット
+          </md-text-button>
+          <div id="participant-list" class="participant-list empty">まだコメントがありません</div>
+        </div>
+      </details>
+
+      <details class="ng-filter-section" id="ng-filter-section">
+        <summary class="ng-filter-summary">
+          <span class="ng-filter-title">NGフィルター</span>
+          <span id="ng-filter-count" class="ng-filter-count">0件</span>
+        </summary>
+        <div class="ng-filter-body">
+          <div class="ng-filter-group">
+            <div class="app-label">NGワード</div>
+            <div class="ng-filter-add-row">
+              <md-outlined-text-field id="ng-word-input" class="ng-filter-input" label="ワードを追加"></md-outlined-text-field>
+              <md-filled-button type="button" id="btn-ng-word-add">追加</md-filled-button>
+            </div>
+            <ul id="ng-word-list" class="ng-filter-list" aria-label="NGワード一覧"></ul>
+          </div>
+          <div class="ng-filter-group">
+            <div class="app-label">NGユーザー</div>
+            <div class="ng-filter-add-row">
+              <md-outlined-text-field id="ng-user-input" class="ng-filter-input" label="チャンネルID"></md-outlined-text-field>
+              <md-filled-button type="button" id="btn-ng-user-add">追加</md-filled-button>
+            </div>
+            <ul id="ng-user-list" class="ng-filter-list" aria-label="NGユーザー一覧"></ul>
+          </div>
+          <p class="dash-muted-caption">新規コメントから適用されます。コメント横の禁止アイコンからもユーザーを追加できます。</p>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <div id="yt-start-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="yt-start-modal-title">
+    <div class="modal-card yt-start-modal-card">
+      <h4 id="yt-start-modal-title">チャット取得</h4>
+      <p id="yt-start-modal-body" class="yt-start-modal-body"></p>
+      <div id="yt-start-pick-list" class="yt-start-pick-list" hidden></div>
+      <label id="yt-start-nudge-dismiss-wrap" class="yt-start-nudge-dismiss" hidden>
+        <input type="checkbox" id="yt-start-nudge-dismiss" />
+        今後この案内を表示しない
+      </label>
+      <div class="modal-actions" id="yt-start-modal-actions"></div>
+    </div>
+  </div>
+
+  <div id="viewer-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <h4 id="modal-title">視聴者詳細</h4>
+      <div class="modal-row"><div class="lbl">チャンネルID</div><div id="modal-channel-id">—</div></div>
+      <div class="modal-row"><div class="lbl">初回来訪</div><div id="modal-first-seen">—</div></div>
+      <div class="modal-row"><div class="lbl">最終コメント</div><div id="modal-last-seen">—</div></div>
+      <div class="modal-row"><div class="lbl">累計コメント数</div><div id="modal-total">—</div></div>
+      <div class="modal-row"><div class="lbl">今回の配信</div><div id="modal-session">—</div></div>
+      <div class="modal-actions">
+        <md-text-button type="button" id="modal-close">閉じる</md-text-button>
+        <md-filled-tonal-button type="button" id="modal-ng-user"
+          style="--md-filled-tonal-button-container-color: color-mix(in srgb, var(--md-sys-color-error) 25%, transparent); --md-filled-tonal-button-label-text-color: var(--md-sys-color-error);">
+          NGユーザーに追加
+        </md-filled-tonal-button>
+      </div>
+    </div>
+  </div>
+
+  <div id="remote-actor-toast" class="remote-actor-toast" hidden role="status" aria-live="polite"></div>
+
+  <script src="dashboard-yt-start-ui.js"></script>
+  <script src="dashboard-app.js"></script>
+</body>
+</html>

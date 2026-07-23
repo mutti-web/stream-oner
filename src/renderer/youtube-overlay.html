@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Chat Overlay</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: transparent;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    :root {
+      --font-family:        'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif;
+      --font-size:          14px;
+      --bg-color:           rgba(0, 0, 0, 0.75);
+      --text-color:         #f0f0f0;
+      --username-color:     #7dd3fc;
+      --superchat-color:    #fbbf24;
+      --owner-color:        #f87171;
+      --moderator-color:    #86efac;
+      --border-radius:      8px;
+      --padding:            6px 10px;
+      --avatar-size:        22px;
+      --gap:                6px;
+      --width:              400px;
+      --enter-duration:     350ms;
+      --exit-duration:      220ms;
+      --easing-enter:       cubic-bezier(0.25, 0.8, 0.25, 1);
+      --easing-exit:        ease-in;
+    }
+
+    #chat-container {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      width: var(--width);
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      pointer-events: none;
+      /* strict は size+paint 含有のため高さ0のまま子がクリップされる */
+      contain: layout style;
+    }
+
+    #chat-container.top-left     { top: 20px;    left: 20px;  bottom: auto; right: auto; }
+    #chat-container.top-right    { top: 20px;    right: 20px; bottom: auto; left: auto; }
+    #chat-container.bottom-left  { bottom: 20px; left: 20px;  top: auto;   right: auto; }
+    #chat-container.bottom-right { bottom: 20px; right: 20px; top: auto;   left: auto; }
+
+    .chat-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: var(--padding);
+      background: var(--bg-color);
+      border-radius: var(--border-radius);
+      font-family: var(--font-family);
+      font-size: var(--font-size);
+      color: var(--text-color);
+      word-break: break-word;
+      line-height: 1.4;
+      animation: slideIn var(--enter-duration) var(--easing-enter) both;
+      contain: content;
+    }
+
+    .chat-item.superchat {
+      border-left: 3px solid var(--sc-tier-color, var(--superchat-color));
+      background: color-mix(in srgb, var(--sc-tier-color, var(--superchat-color)) 18%, transparent);
+      transform: scale(var(--sc-tier-scale, 1));
+      transform-origin: left center;
+    }
+    .chat-item.superchat .superchat-amount {
+      color: var(--sc-tier-color, var(--superchat-color));
+    }
+
+    .chat-item.removing {
+      animation: slideOut var(--exit-duration) var(--easing-exit) both;
+    }
+
+    .avatar {
+      width: var(--avatar-size); height: var(--avatar-size);
+      border-radius: 50%;
+      flex-shrink: 0;
+      object-fit: cover;
+      background: #555;
+    }
+
+    .msg-body { flex: 1; min-width: 0; }
+
+    .msg-header {
+      display: flex; align-items: center; gap: 4px;
+      margin-bottom: 2px;
+    }
+
+    .username {
+      font-weight: 700; font-size: 0.85em;
+      color: var(--username-color);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 140px;
+    }
+
+    .badge {
+      font-size: 0.65em; font-weight: 700;
+      padding: 1px 5px; border-radius: 4px; flex-shrink: 0;
+    }
+    .badge-owner     { background: var(--owner-color);     color: #1a1a1a; }
+    .badge-moderator { background: var(--moderator-color); color: #1a1a1a; }
+    .badge-member    { background: #818cf8; color: #1a1a1a; }
+    .badge-first     { background: #10b981; color: #fff; }
+    .badge-regular   { background: #f59e0b; color: #1a1a1a; }
+
+    .msg-text { font-size: var(--font-size); color: var(--text-color); }
+    .msg-text.emoji-only {
+      font-size: 2.5em;
+      line-height: 1.2;
+      padding-top: 4px;
+    }
+
+    .superchat-amount {
+      margin-top: 3px; font-size: 0.8em; font-weight: 700;
+      color: var(--superchat-color);
+    }
+
+    #pinned-container {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(var(--width), calc(100vw - 40px));
+      z-index: 20;
+      pointer-events: none;
+    }
+    #pinned-container.hidden { display: none; }
+    #membership-banner {
+      position: fixed;
+      top: 8px;
+      right: 16px;
+      max-width: min(360px, 40vw);
+      z-index: 25;
+      pointer-events: none;
+    }
+    #membership-banner.hidden { display: none; }
+    .membership-item {
+      font-family: var(--font-family);
+      font-size: 0.9em;
+      font-weight: 700;
+      color: #fff;
+      background: linear-gradient(90deg, rgba(129, 140, 248, 0.92), rgba(167, 139, 250, 0.88));
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      animation: pinIn var(--enter-duration) var(--easing-enter) both;
+    }
+    .pinned-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .pinned-label {
+      font-family: var(--font-family);
+      font-size: 0.75em;
+      font-weight: 700;
+      color: var(--superchat-color);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      padding-left: 2px;
+    }
+    .chat-item.pinned-item {
+      border: 2px solid var(--superchat-color);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+      animation: pinIn var(--enter-duration) var(--easing-enter) both;
+    }
+    @keyframes pinIn {
+      from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    #status-dot {
+      position: fixed; top: 8px; right: 8px;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #ef4444; opacity: 0.6;
+      transition: background 0.3s;
+    }
+    #status-dot.connected    { background: #22c55e; }
+    #status-dot.reconnecting { background: #f59e0b; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .anim-fade-in .chat-item { animation-name: fadeIn; }
+    @keyframes fadeIn {
+      from { opacity: 0; } to { opacity: 1; }
+    }
+    @keyframes slideOut {
+      from { opacity: 1; transform: translateY(0) scaleY(1); max-height: 100px; }
+      to   { opacity: 0; transform: translateY(-6px) scaleY(0.8); max-height: 0;
+             padding-top: 0; padding-bottom: 0; }
+    }
+  </style>
+  <style id="custom-user-css"></style>
+  <script src="/shared/custom-css-loader.js"></script>
+</head>
+<body>
+  <div id="status-dot" title="WebSocket接続状態"></div>
+  <div id="membership-banner" class="hidden" aria-live="polite"></div>
+  <div id="pinned-container" class="hidden" aria-live="polite"></div>
+  <div id="chat-container" class="bottom-right" role="log" aria-live="polite"></div>
+
+  <script>
+    'use strict';
+
+    let cfg = null;
+    let ws  = null;
+    let reconnectTimer  = null;
+    let reconnectDelay  = 1000;
+
+    const container = document.getElementById('chat-container');
+    const pinContainer = document.getElementById('pinned-container');
+    const membershipBanner = document.getElementById('membership-banner');
+    const statusDot = document.getElementById('status-dot');
+    const pinnedIds = new Set();
+
+    // ============================================================
+    // 設定を CSS 変数に反映
+    // ============================================================
+    function applyConfig(config) {
+      cfg = config;
+      const { style, display, animation } = config;
+      const root = document.documentElement;
+
+      if (style) {
+        root.style.setProperty('--font-family',     style.fontFamily      || "'Noto Sans JP', sans-serif");
+        root.style.setProperty('--font-size',       (style.fontSize || 14) + 'px');
+        root.style.setProperty('--bg-color',        style.backgroundColor || 'rgba(0,0,0,0.75)');
+        root.style.setProperty('--text-color',      style.textColor       || '#f0f0f0');
+        root.style.setProperty('--username-color',  style.usernameColor   || '#7dd3fc');
+        root.style.setProperty('--superchat-color', style.superChatColor  || '#fbbf24');
+        root.style.setProperty('--owner-color',     style.ownerColor      || '#f87171');
+        root.style.setProperty('--moderator-color', style.moderatorColor  || '#86efac');
+        root.style.setProperty('--border-radius',   (style.borderRadius || 8) + 'px');
+        root.style.setProperty('--padding',         style.padding         || '6px 10px');
+        root.style.setProperty('--avatar-size',     (style.avatarSize || 22) + 'px');
+      }
+      if (display) {
+        root.style.setProperty('--width', (display.width || 400) + 'px');
+        root.style.setProperty('--gap',   (display.gap   || 6)   + 'px');
+      }
+      if (animation) {
+        root.style.setProperty('--enter-duration', (animation.enterDurationMs || 350) + 'ms');
+        root.style.setProperty('--exit-duration',  (animation.exitDurationMs  || 220) + 'ms');
+        root.style.setProperty('--easing-enter',   animation.easingEnter || 'cubic-bezier(0.25,0.8,0.25,1)');
+        root.style.setProperty('--easing-exit',    animation.easingExit  || 'ease-in');
+      }
+
+      container.className = '';
+      container.classList.add(display?.position || 'bottom-right');
+      if (display?.animMode === 'fade-in') container.classList.add('anim-fade-in');
+    }
+
+    function resolveSuperChatTier(msg) {
+      if (!msg?.superChat) return null;
+      const tiers = cfg?.display?.superChatTiers;
+      if (!Array.isArray(tiers) || !tiers.length) return null;
+      const micros = Number(msg.superChat.amountMicros);
+      let amountYen = 0;
+      if (Number.isFinite(micros) && micros > 0) amountYen = Math.floor(micros / 1_000_000);
+      else {
+        const digits = String(msg.superChat.amountDisplayString || '').replace(/[^\d]/g, '');
+        amountYen = Number(digits) || 0;
+      }
+      let tier = tiers[0];
+      for (const t of tiers) {
+        if (amountYen >= (Number(t.minAmount) || 0)) tier = t;
+      }
+      return tier;
+    }
+
+    function applySuperChatTierStyle(item, msg) {
+      const tier = resolveSuperChatTier(msg);
+      if (!tier) return null;
+      item.style.setProperty('--sc-tier-color', tier.color || '#fbbf24');
+      item.style.setProperty('--sc-tier-scale', String(tier.scale || 1));
+      return tier;
+    }
+
+    // ============================================================
+    // コメント追加
+    // ============================================================
+    function addMessage(msg) {
+      const maxComments  = cfg?.display?.maxComments   ?? 8;
+      let showDuration = cfg?.display?.showDurationMs ?? 8000;
+      if (msg?.superChat) {
+        const tier = resolveSuperChatTier(msg);
+        if (tier?.durationMs) showDuration = tier.durationMs;
+      }
+
+      const el = createChatItem(msg);
+      container.appendChild(el);
+
+      const items = container.querySelectorAll('.chat-item:not(.removing)');
+      if (items.length > maxComments) {
+        const overflow = items.length - maxComments;
+        for (let i = 0; i < overflow; i++) removeItem(items[i]);
+      }
+
+      setTimeout(() => removeItem(el), showDuration);
+    }
+
+    function setPins(list) {
+      pinContainer.innerHTML = '';
+      pinnedIds.clear();
+      const pins = Array.isArray(list) ? list : (list ? [list] : []);
+      if (!pins.length) {
+        pinContainer.classList.add('hidden');
+        return;
+      }
+      pinContainer.classList.remove('hidden');
+      const wrap = document.createElement('div');
+      wrap.className = 'pinned-wrap';
+      const label = document.createElement('div');
+      label.className = 'pinned-label';
+      label.textContent = pins.length > 1 ? `📌 ピン留め (${pins.length})` : '📌 ピン留め';
+      wrap.appendChild(label);
+      for (const msg of pins) {
+        if (msg?.id) pinnedIds.add(msg.id);
+        const item = createChatItem(msg);
+        item.classList.add('pinned-item');
+        wrap.appendChild(item);
+      }
+      pinContainer.appendChild(wrap);
+    }
+
+    function showMembershipBanner(msg) {
+      if (!membershipBanner) return;
+      membershipBanner.classList.remove('hidden');
+      const el = document.createElement('div');
+      el.className = 'membership-item';
+      const name = msg.author?.name || 'メンバー';
+      const text = (msg.text || '').trim() || 'メンバーシップの更新';
+      el.textContent = `🎉 ${name}: ${text}`;
+      membershipBanner.appendChild(el);
+      setTimeout(() => {
+        el.remove();
+        if (!membershipBanner.children.length) membershipBanner.classList.add('hidden');
+      }, 12000);
+    }
+
+    function createChatItem(msg) {
+      const item = document.createElement('div');
+      item.className = 'chat-item' + (msg.superChat ? ' superchat' : '');
+      if (msg.superChat) applySuperChatTierStyle(item, msg);
+
+      const avatar = document.createElement('img');
+      avatar.className = 'avatar';
+      avatar.src = msg.author.iconUrl || '';
+      avatar.alt = msg.author.name;
+      avatar.loading = 'lazy';
+      avatar.onerror = () => { avatar.style.display = 'none'; };
+
+      const body   = document.createElement('div');
+      body.className = 'msg-body';
+
+      const header = document.createElement('div');
+      header.className = 'msg-header';
+
+      const username = document.createElement('span');
+      username.className = 'username';
+      username.textContent = msg.author.name;
+      header.appendChild(username);
+
+      if (msg.author.isOwner)         header.appendChild(makeBadge('配信者', 'owner'));
+      else if (msg.author.isModerator) header.appendChild(makeBadge('MOD',    'moderator'));
+      else if (msg.author.isMember)    header.appendChild(makeBadge('メンバー', 'member'));
+
+      if (msg.author.isFirstTime) {
+        header.appendChild(makeBadge(cfg?.display?.badgeFirst || '🔰初見', 'first'));
+      } else if (msg.author.isRegular) {
+        header.appendChild(makeBadge(cfg?.display?.badgeRegular || '⭐常連', 'regular'));
+      }
+
+      body.appendChild(header);
+
+      const text = document.createElement('div');
+      text.className   = 'msg-text' + (msg.isEmojiOnly ? ' emoji-only' : '');
+      text.textContent = msg.text;
+      body.appendChild(text);
+
+      if (msg.superChat) {
+        const amount = document.createElement('div');
+        amount.className   = 'superchat-amount';
+        amount.textContent = msg.superChat.amountDisplayString ?? '';
+        body.appendChild(amount);
+      }
+
+      item.appendChild(avatar);
+      item.appendChild(body);
+      return item;
+    }
+
+    function makeBadge(label, type) {
+      const b = document.createElement('span');
+      b.className   = `badge badge-${type}`;
+      b.textContent = label;
+      return b;
+    }
+
+    function removeItem(item) {
+      if (!item || item.classList.contains('removing')) return;
+      item.classList.add('removing');
+      item.addEventListener('animationend', () => item.remove(), { once: true });
+    }
+
+    // ============================================================
+    // WebSocket 接続（Electron アプリ内から ws://127.0.0.1:3002 で配信）
+    // ============================================================
+    function connect() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  const wsUrl = `ws://${window.location.host}`;
+
+  try { ws = new WebSocket(wsUrl); }
+  catch { scheduleReconnect(); return; }
+
+      ws.addEventListener('open', () => {
+        statusDot.className = 'connected';
+        reconnectDelay = 1000;
+      });
+
+      ws.addEventListener('message', ({ data }) => {
+        let packet;
+        try { packet = JSON.parse(data); } catch { return; }
+
+        switch (packet.type) {
+          case 'init':
+            applyConfig(packet.config);
+            setPins(packet.pins ?? (packet.pinned ? [packet.pinned] : []));
+            break;
+          case 'message': addMessage(packet.data); break;
+          case 'membership': showMembershipBanner(packet.data); break;
+          case 'config':  applyConfig(packet.data); break;
+          case 'pins':    setPins(packet.data); break;
+          case 'pin':     setPins(packet.data ? [packet.data] : []); break;
+          case 'unpin':   setPins([]); break;
+        }
+      });
+
+      ws.addEventListener('close', () => {
+        statusDot.className = 'reconnecting';
+        ws = null;
+        scheduleReconnect();
+      });
+
+      ws.addEventListener('error', () => { statusDot.className = ''; });
+    }
+
+    function scheduleReconnect() {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(() => {
+        reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+        connect();
+      }, reconnectDelay);
+    }
+
+    connect();
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) connect();
+    });
+  </script>
+</body>
+</html>

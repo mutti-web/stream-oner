@@ -1,0 +1,142 @@
+{
+  "messages": [
+    {
+      "_delayMs": 2500,
+      "id": "rehearsal-1",
+      "type": "textMessageEvent",
+      "text": "こんにちは！初見です",
+      "author": {
+        "name": "視聴者アルファ",
+        "id": "UC_rehearsal_alpha",
+        "isModerator": false,
+        "isMember": false,
+        "isOwner": false,
+        "isFirstTime": true,
+        "iconUrl": ""
+      }
+    },
+    {
+      "_delayMs": 3500,
+      "id": "rehearsal-2",
+      "type": "textMessageEvent",
+      "text": "配信お疲れ様です〜",
+      "author": {
+        "name": "常連ベータ",
+        "id": "UC_rehearsal_beta",
+        "isModerator": false,
+        "isMember": true,
+        "isOwner": false,
+        "isRegular": true,
+        "iconUrl": ""
+      }
+    },
+    {
+      "_delayMs": 3200,
+      "id": "rehearsal-emoji-1",
+      "type": "textMessageEvent",
+      "text": "🎉👏🔥",
+      "author": {
+        "name": "スタンプ派",
+        "id": "UC_rehearsal_emoji",
+        "isModerator": false,
+        "isMember": false,
+        "isOwner": false,
+        "iconUrl": ""
+      }
+    },
+    {
+      "_delayMs": 4000,
+      "id": "rehearsal-3",
+      "type": "textMessageEvent",
+      "text": "!party",
+      "author": {
+        "name": "盛り上げ役",
+        "id": "UC_rehearsal_party",
+        "isModerator": true,
+        "isMember": false,
+        "isOwner": false,
+        "iconUrl": ""
+      }
+    },
+    {
+      "_delayMs": 5000,
+      "id": "rehearsal-sc-1",
+      "type": "superChatEvent",
+      "text": "応援しています！",
+      "superChat": {
+        "amountMicros": "500000000",
+        "amountDisplayString": "¥500",
+        "currency": "JPY"
+      },
+      "author": {
+        "name": "スパチャ太郎",
+        "id": "UC_rehearsal_sc",
+        "isModerator": false,
+        "isMember": true,
+        "isOwner": false,
+        "iconUrl": ""
+      }
+    },
+    {
+      "_delayMs": 4500,
+      "id": "rehearsal-4",
+      "type": "textMessageEvent",
+      "text": "画面きれいですね",
+      "author": {
+        "name": "視聴者ガンマ",
+        "id": "UC_rehearsal_gamma",
+        "isModerator": false,
+        "isMember": false,
+        "isOwner": false,
+        "iconUrl": ""
+      }
+    },
+    {
+      "_delayMs": 6000,
+      "id": "rehearsal-sc-2",
+      "type": "superChatEvent",
+      "text": "大型スパチャです！",
+      "superChat": {
+        "amountMicros": "2500000000",
+        "amountDisplayString": "¥2,500",
+        "currency": "JPY"
+      },
+      "author": {
+        "name": "VIP視聴者",
+        "id": "UC_rehearsal_sc2",
+        "isModerator": false,
+        "isMember": true,
+        "isOwner": false,
+        "iconUrl": ""
+      }
+    },
+    {
+      "_delayMs": 3000,
+      "id": "rehearsal-member-1",
+      "type": "newSponsorEvent",
+      "text": "メンバーシップに加入しました",
+      "author": {
+        "name": "新規メンバー",
+        "id": "UC_rehearsal_member",
+        "isModerator": false,
+        "isMember": true,
+        "isOwner": false,
+        "iconUrl": ""
+      }
+    },
+    {
+      "_delayMs": 4000,
+      "id": "rehearsal-5",
+      "type": "textMessageEvent",
+      "text": "また来ます！",
+      "author": {
+        "name": "視聴者デルタ",
+        "id": "UC_rehearsal_delta",
+        "isModerator": false,
+        "isMember": false,
+        "isOwner": false,
+        "iconUrl": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+/**
+ * custom-example.css - カスタムCSSサンプルファイル
+ *
+ * このファイルを設定画面で指定するとオーバーレイの見た目を変更できます。
+ * 設定変更はアプリを再起動せずリアルタイムで反映されます。
+ *
+ * 使用可能なCSS変数一覧:
+ * --overlay-bg          : 背景色（デフォルト: rgba(20,20,30,0.85)）
+ * --overlay-bg-hover    : ホバー時背景色
+ * --overlay-border      : ボーダー色
+ * --text-primary        : メインテキスト色
+ * --text-secondary      : サブテキスト色
+ * --speaking-color      : 発話中のハイライト色（デフォルト: #23a55a）
+ * --speaking-glow       : 発話中のグロー色
+ * --muted-color         : ミュート色
+ * --avatar-size         : アバターサイズ（デフォルト: 40px）
+ * --font-family         : フォント
+ * --border-radius       : 角の丸み
+ * --animation-speed     : アニメーション速度
+ */
+
+/* ============================================================
+   例1: より大きいアバター・ゲーム配信向けスタイル
+============================================================ */
+
+:root {
+  /* アバターを大きく */
+  --avatar-size: 48px;
+
+  /* 発話色を明るい緑に */
+  --speaking-color: #57f287;
+  --speaking-glow: rgba(87, 242, 135, 0.6);
+
+  /* 背景を少し透明に */
+  --overlay-bg: rgba(15, 15, 20, 0.80);
+
+  /* ボーダーを非表示にしたい場合 */
+  /* --overlay-border: transparent; */
+}
+
+/* ============================================================
+   例2: 発話中カードのカスタムアニメーション
+   （バウンス効果）
+============================================================ */
+
+/*
+.user-card.speaking {
+  animation: speakBounce 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes speakBounce {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+*/
+
+/* ============================================================
+   例3: ユーザー名のカスタムフォント
+============================================================ */
+
+/*
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+
+:root {
+  --font-family: 'Noto Sans JP', sans-serif;
+}
+*/
+
+/* ============================================================
+   例4: VTuber向け - 縦並び・アバター強調スタイル
+============================================================ */
+
+/*
+:root {
+  --avatar-size: 56px;
+  --border-radius: 16px;
+}
+
+.user-card {
+  padding: 12px 16px;
+  gap: 14px;
+}
+
+.username {
+  font-size: 16px;
+}
+*/
+
+/* ============================================================
+   例5: ミニマリスト - アバターのみ表示
+============================================================ */
+
+/*
+.user-info {
+  display: none;
+}
+
+.user-card {
+  padding: 6px 8px;
+  justify-content: center;
+}
+
+#channel-header {
+  display: none !important;
+}
+
+#user-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(0,0,0,0.6);
+  border-radius: 12px;
+}
+*/

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+out/
+.DS_Store
+**/.DS_Store
+.ai_docs/
+*.log
+.env
+.env.*
+youtube-oauth.local.json
+src/main/youtube-oauth.bundled.json
