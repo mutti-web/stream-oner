@@ -19,6 +19,7 @@
     "build:oauth-optional": "npm run inject:oauth && rollup -c && electron-builder --win"
   },
   "dependencies": {
+    "pixi.js": "^8.19.0",
     "qrcode": "^1.5.4",
     "ws": "^8.16.0"
   },
