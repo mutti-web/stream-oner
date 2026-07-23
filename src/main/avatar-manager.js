@@ -28,7 +28,7 @@ const PIXI_OVERLAY_HTML = path.join(RENDERER_DIR, 'avatar-pixi-overlay.html');
 const serveAvatarOverlayStatic = createRendererStaticHandler(RENDERER_DIR, {
   '/avatar-overlay.css': 'avatar-overlay.css',
   '/avatar-overlay-runtime.js': 'avatar-overlay-runtime.js',
-  '/avatar-pixi-spike.js': 'avatar-pixi-spike.js',
+  '/avatar-pixi-runtime.js': 'avatar-pixi-runtime.js',
   '/vendor/pixi.min.js': 'vendor/pixi.min.js',
   '/shared/avatar-constants.js': 'shared/avatar-constants.js',
 });

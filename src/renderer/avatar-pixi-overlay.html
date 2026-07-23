@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>Avatar Pixi Spike - OBS</title>
+  <title>Avatar Pixi Overlay - OBS</title>
   <style>
     html, body {
       margin: 0;
@@ -56,12 +56,13 @@
 <body>
   <div id="stage"></div>
   <aside id="hud">
-    <h1>Pixi スパイク (p1)</h1>
+    <h1>Pixi P1（手動 pose）</h1>
     <label>yaw <input id="yaw" type="range" min="-30" max="30" value="0" step="1" /><span id="yaw-val">0</span></label>
     <label>pitch <input id="pitch" type="range" min="-20" max="20" value="0" step="1" /><span id="pitch-val">0</span></label>
     <div class="meta" id="status">WS: connecting…</div>
   </aside>
+  <script src="/shared/avatar-constants.js"></script>
   <script src="/vendor/pixi.min.js"></script>
-  <script src="/avatar-pixi-spike.js"></script>
+  <script src="/avatar-pixi-runtime.js"></script>
 </body>
 </html>
