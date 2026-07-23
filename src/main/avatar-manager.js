@@ -381,15 +381,6 @@ class AvatarManager extends EventEmitter {
         return;
       }
 
-      if (url === '/overlay-pixi') {
-        staticFileCache.readUtf8(PIXI_OVERLAY_HTML, (err, data) => {
-          if (err) { res.writeHead(404); res.end('not found'); return; }
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(data);
-        });
-        return;
-      }
-
       if (url === '/preview' && previewPath) {
         staticFileCache.readUtf8(previewPath, (err, data) => {
           if (err) { res.writeHead(404); res.end('not found'); return; }
