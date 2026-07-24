@@ -1,6 +1,6 @@
 {
   "name": "stream-overlay-suite",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "StreamONER - Discord RPC & YouTube Chat Overlay",
   "main": "src/main/main.js",
   "scripts": {
