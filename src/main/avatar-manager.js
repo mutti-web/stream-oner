@@ -93,6 +93,7 @@ const K = {
   smileSensitivity: 'avatar.smileSensitivity',
   faceTrackEnabled: 'avatar.faceTrackEnabled',
   cameraDeviceId:   'avatar.cameraDeviceId',
+  faceAssignSwap:   'avatar.faceAssignSwap',
 };
 
 const SLOT_KEYS = [
@@ -124,7 +125,11 @@ class AvatarManager extends EventEmitter {
     );
 
     this._status = { serverRunning: false, audioRunning: false, faceRunning: false, error: null, faceError: null };
-    this._lastPose = { yaw: 0, pitch: 0, tracking: false };
+    this._lastPose = {
+      yaw: 0, pitch: 0, tracking: false, faceCount: 0,
+      p1: { yaw: 0, pitch: 0, tracking: false },
+      p2: { yaw: 0, pitch: 0, tracking: false },
+    };
     this._lastPoseSentAt = 0;
     this._lastLevels = {
       p1: 0, p2: 0,
@@ -216,6 +221,7 @@ class AvatarManager extends EventEmitter {
       smileSensitivity: s.get(K.smileSensitivity, 50),
       faceTrackEnabled: s.get(K.faceTrackEnabled, false),
       cameraDeviceId: s.get(K.cameraDeviceId, ''),
+      faceAssignSwap: s.get(K.faceAssignSwap, false),
       obsUrl: `${base}/overlay`,
       /** Pixi 実験用（現行 DOM とは別 URL。OBS では ?hud=0） */
       obsUrlPixi: `${base}/overlay-pixi`,
@@ -234,7 +240,7 @@ class AvatarManager extends EventEmitter {
       'smileDetectEnabled', 'smileSensitivity',
     ].some((k) => settings[k] !== undefined);
     const faceDirty = [
-      'enabled', 'faceTrackEnabled', 'cameraDeviceId',
+      'enabled', 'faceTrackEnabled', 'cameraDeviceId', 'faceAssignSwap', 'displayMode',
     ].some((k) => settings[k] !== undefined);
     const slotAudioDirty = ['p1', 'p2'].some((p) =>
       settings[`${p}_speakThreshold`] !== undefined ||
@@ -254,6 +260,7 @@ class AvatarManager extends EventEmitter {
     if (settings.smileSensitivity !== undefined) s.set(K.smileSensitivity, Number(settings.smileSensitivity));
     if (settings.faceTrackEnabled !== undefined) s.set(K.faceTrackEnabled, !!settings.faceTrackEnabled);
     if (settings.cameraDeviceId !== undefined) s.set(K.cameraDeviceId, String(settings.cameraDeviceId || ''));
+    if (settings.faceAssignSwap !== undefined) s.set(K.faceAssignSwap, !!settings.faceAssignSwap);
 
     const saveSlotFromSettings = (slotId, storeKey, prefix) => {
       if (settings[`${prefix}Slot`]) {
@@ -343,14 +350,24 @@ class AvatarManager extends EventEmitter {
     }
   }
 
+  _emptyPose() {
+    return {
+      yaw: 0, pitch: 0, tracking: false, faceCount: 0,
+      p1: { yaw: 0, pitch: 0, tracking: false },
+      p2: { yaw: 0, pitch: 0, tracking: false },
+    };
+  }
+
   async _syncFaceFromStore() {
     const enabled = this._store.get(K.enabled, false);
     const faceOn = !!this._store.get(K.faceTrackEnabled, false);
     const cameraDeviceId = String(this._store.get(K.cameraDeviceId, '') || '');
+    const faceAssignSwap = !!this._store.get(K.faceAssignSwap, false);
+    const displayMode = this.getDisplayMode();
     // MediaPipe は avatar HTTP 経由。サーバー未起動なら開始しない
     if (!enabled || !faceOn || !this._server) {
       this._face.stop();
-      this._lastPose = { yaw: 0, pitch: 0, tracking: false };
+      this._lastPose = this._emptyPose();
       if (this._server) this._broadcast({ type: 'pose', ...this._lastPose });
       this._updateStatus({ faceRunning: false, faceError: null });
       return;
@@ -359,6 +376,8 @@ class AvatarManager extends EventEmitter {
       await this._face.start({
         enabled: true,
         cameraDeviceId,
+        faceAssignSwap,
+        displayMode,
         assetBaseUrl: `http://127.0.0.1:${this._port}`,
       });
       this._updateStatus({ faceRunning: true, faceError: null });
@@ -371,18 +390,29 @@ class AvatarManager extends EventEmitter {
   _onFacePose(pose) {
     if (!this._store.get(K.enabled, false)) return;
     if (!this._store.get(K.faceTrackEnabled, false)) return;
+    const p1 = pose?.p1 || {};
+    const p2 = pose?.p2 || {};
     const next = {
-      yaw: Number(pose?.yaw) || 0,
-      pitch: Number(pose?.pitch) || 0,
-      tracking: !!pose?.tracking,
+      yaw: Number(pose?.yaw) || Number(p1.yaw) || 0,
+      pitch: Number(pose?.pitch) || Number(p1.pitch) || 0,
+      tracking: !!(pose?.tracking || p1.tracking || p2.tracking),
+      faceCount: Number(pose?.faceCount) || ((p1.tracking ? 1 : 0) + (p2.tracking ? 1 : 0)),
+      p1: {
+        yaw: Number(p1.yaw) || 0,
+        pitch: Number(p1.pitch) || 0,
+        tracking: !!p1.tracking,
+      },
+      p2: {
+        yaw: Number(p2.yaw) || 0,
+        pitch: Number(p2.pitch) || 0,
+        tracking: !!p2.tracking,
+      },
     };
     this._lastPose = next;
-    // 追跡成功時はエラー表示をクリア
     if (next.tracking && this._status.faceError) {
       this._updateStatus({ faceError: null });
     }
     const now = Date.now();
-    // ~30fps 上限。追跡ロストはすぐ伝える
     if (!next.tracking || now - this._lastPoseSentAt >= 33) {
       this._lastPoseSentAt = now;
       this._broadcast({ type: 'pose', ...next });
@@ -620,7 +650,7 @@ class AvatarManager extends EventEmitter {
     if (this._wss) { try { this._wss.close(); } catch (_) { /* */ } this._wss = null; }
     if (this._server) { try { this._server.close(); } catch (_) { /* */ } this._server = null; }
     this._clients.clear();
-    this._lastPose = { yaw: 0, pitch: 0, tracking: false };
+    this._lastPose = this._emptyPose();
     this._updateStatus({ serverRunning: false, audioRunning: false, faceRunning: false });
   }
 

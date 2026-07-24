@@ -63,7 +63,11 @@ const faceStatusEl = document.getElementById('face-status');
 
 if (!SHOW_HUD && hud) hud.classList.add('hidden-for-obs');
 
-const pose = { yaw: 0, pitch: 0, tracking: false, fromFace: false };
+const pose = { yaw: 0, pitch: 0, tracking: false, fromFace: false, faceCount: 0 };
+const slotPose = {
+  p1: { yaw: 0, pitch: 0, tracking: false },
+  p2: { yaw: 0, pitch: 0, tracking: false },
+};
 /** HUD をユーザーが操作中は face pose で上書きしない */
 let hudManualUntil = 0;
 let faceTrackEnabled = false;
@@ -91,7 +95,10 @@ function updateFaceStatusUi() {
     return;
   }
   if (pose.fromFace && pose.tracking) {
-    faceStatusEl.textContent = `顔トラッキング: 追従中  yaw ${pose.yaw.toFixed(2)}  pitch ${pose.pitch.toFixed(2)}`;
+    const n = pose.faceCount || ((slotPose.p1.tracking ? 1 : 0) + (slotPose.p2.tracking ? 1 : 0));
+    faceStatusEl.textContent =
+      `顔トラッキング: 追従中 (${n}顔)  p1 ${slotPose.p1.yaw.toFixed(2)}/${slotPose.p1.pitch.toFixed(2)}` +
+      (slotPose.p2.tracking ? `  p2 ${slotPose.p2.yaw.toFixed(2)}/${slotPose.p2.pitch.toFixed(2)}` : '');
     faceStatusEl.dataset.state = 'ok';
     return;
   }
@@ -142,9 +149,15 @@ function syncHudLabels() {
 }
 
 function syncPoseFromHud() {
-  pose.yaw = Number(yawInput?.value) || 0;
-  pose.pitch = Number(pitchInput?.value) || 0;
+  const yaw = Number(yawInput?.value) || 0;
+  const pitch = Number(pitchInput?.value) || 0;
+  pose.yaw = yaw;
+  pose.pitch = pitch;
   pose.fromFace = false;
+  pose.tracking = true;
+  pose.faceCount = 1;
+  slotPose.p1 = { yaw, pitch, tracking: true };
+  slotPose.p2 = { yaw, pitch, tracking: true };
   hudManualUntil = performance.now() + 2500;
   syncHudLabels();
 }
@@ -155,9 +168,30 @@ function applyFacePose(msg) {
     updateFaceStatusUi();
     return;
   }
-  pose.yaw = Number(msg.yaw) || 0;
-  pose.pitch = Number(msg.pitch) || 0;
-  pose.tracking = !!msg.tracking;
+  if (msg.p1 || msg.p2) {
+    slotPose.p1 = {
+      yaw: Number(msg.p1?.yaw) || 0,
+      pitch: Number(msg.p1?.pitch) || 0,
+      tracking: !!msg.p1?.tracking,
+    };
+    slotPose.p2 = {
+      yaw: Number(msg.p2?.yaw) || 0,
+      pitch: Number(msg.p2?.pitch) || 0,
+      tracking: !!msg.p2?.tracking,
+    };
+  } else {
+    const one = {
+      yaw: Number(msg.yaw) || 0,
+      pitch: Number(msg.pitch) || 0,
+      tracking: !!msg.tracking,
+    };
+    slotPose.p1 = { ...one };
+    slotPose.p2 = { ...one };
+  }
+  pose.yaw = slotPose.p1.yaw;
+  pose.pitch = slotPose.p1.pitch;
+  pose.tracking = !!(slotPose.p1.tracking || slotPose.p2.tracking);
+  pose.faceCount = Number(msg.faceCount) || ((slotPose.p1.tracking ? 1 : 0) + (slotPose.p2.tracking ? 1 : 0));
   pose.fromFace = true;
   syncHudLabels();
 }
@@ -338,6 +372,7 @@ function createEmptySlot(id) {
     assets: {},
     sprites: {},
     customItems: [],
+    attachGroup: null,
     useLayers: false,
     speaking: false,
     laughing: false,
@@ -433,12 +468,26 @@ async function rebuildSlot(id, data) {
       0xffffff,
     );
 
+    s.attachGroup = new PIXI.Container();
+    s.attachGroup.sortableChildren = true;
+    s.root.addChild(s.attachGroup);
+
+    const maskSource = s.sprites.face || s.sprites.body || null;
+    const useMask = cfg.faceMaskEnabled !== false && maskSource;
+
     for (const [name, sp] of Object.entries(s.sprites)) {
       if (!sp) continue;
       const lo = layerXY(cfg, name === 'pupil' ? 'eyes' : name);
       sp.position.set(lo.x, lo.y);
       if (sp.texture && lo.scaleMul !== 1) fitSprite(sp, SLOT_TARGET_H, lo.scaleMul);
-      s.root.addChild(sp);
+      if (name === 'eyes' || name === 'mouth' || name === 'nose' || name === 'pupil') {
+        s.attachGroup.addChild(sp);
+      } else {
+        s.root.addChild(sp);
+      }
+    }
+    if (useMask) {
+      s.attachGroup.mask = maskSource;
     }
   } else {
     const url = pickCompositeUrl(s) || a.face || a.body;
@@ -459,7 +508,11 @@ async function rebuildSlot(id, data) {
       fitSprite(sp, SLOT_TARGET_H, sc);
     }
     s.customItems.push({ cfg: cl, sp, assetKey });
-    s.root.addChild(sp);
+    if (s.attachGroup && isAttachChildAnchor(cl.parentAnchor)) {
+      s.attachGroup.addChild(sp);
+    } else {
+      s.root.addChild(sp);
+    }
   }
 
   const fx = cfg.flipX ? -1 : 1;
@@ -666,8 +719,8 @@ function applySlotVisuals(s, tNow) {
     s.nextBlinkAt = tNow + naturalBlinkDelayMs(s.cfg);
   }
 
-  const ox = pose.yaw * YAW_PX;
-  const oy = pose.pitch * PITCH_PX;
+  const ox = (slotPose[s.id] || slotPose.p1).yaw * YAW_PX;
+  const oy = (slotPose[s.id] || slotPose.p1).pitch * PITCH_PX;
   const Sp = s.sprites;
   const mult = multipliersFor(s.cfg);
   const layers = s.cfg?.layers || {};

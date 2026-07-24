@@ -230,6 +230,7 @@
       desc: '顔の動き・声に対する髪スプリング。0 で追従のみ、大きいほど余韻が残ります',
       control: numberField(prefix, 'hairSpringStrength', 'スプリング強さ', { step: '0.05', min: 0, max: 1, value: '0.55' }),
     });
+    body += toggleField(prefix, 'faceMaskEnabled', '顔マスク（Pixi）', '目・口・鼻・瞳を face（なければ body）の不透明部分でクリップします');
     body += '</div></details>';
 
     body += '<details class="av-adv-details">';

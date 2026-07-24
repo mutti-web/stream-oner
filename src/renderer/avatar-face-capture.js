@@ -1,8 +1,9 @@
 /**
  * avatar-face-capture.js — MediaPipe Face Landmarker（非表示ウィンドウ）
  * landmarks: 1(鼻), 33(左目), 263(右目), 152(顎)
+ * numFaces は displayMode 連動: both=2（左→p1 / 右→p2）、p1|p2=1
  *
- * WASM / model は file:// 不可のため、avatar HTTP（config の URL）から読み込む。
+ * WASM / model は avatar HTTP（config の URL）から読み込む。
  */
 
 'use strict';
@@ -23,11 +24,41 @@ let video = null;
 let stream = null;
 let rafId = 0;
 let running = false;
-let yawSmoothed = 0;
-let pitchSmoothed = 0;
-let lostCount = 0;
-let calib = null;
 let lastVideoTime = -1;
+
+/**
+ * displayMode に連動:
+ * - both → 最大2顔（左=p1 / 右=p2）
+ * - p1 / p2 → 最大1顔（検出顔をそのスロットへ）
+ * @type {{ swapAssign: boolean, displayMode: 'both'|'p1'|'p2', numFaces: 1|2 }}
+ */
+let runtimeOpts = { swapAssign: false, displayMode: 'both', numFaces: 2 };
+
+function resolveFaceOpts(config) {
+  const dm = config?.displayMode === 'p1' || config?.displayMode === 'p2'
+    ? config.displayMode
+    : 'both';
+  return {
+    swapAssign: !!config?.faceAssignSwap,
+    displayMode: dm,
+    numFaces: dm === 'both' ? 2 : 1,
+  };
+}
+
+function emptySlotState() {
+  return {
+    yaw: 0,
+    pitch: 0,
+    tracking: false,
+    calib: null,
+    lost: 0,
+  };
+}
+
+const faceSlots = {
+  p1: emptySlotState(),
+  p2: emptySlotState(),
+};
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
@@ -52,14 +83,57 @@ function computeRawPose(lm) {
   const eyeDist = Math.hypot(rightEye.x - leftEye.x, rightEye.y - leftEye.y) || 1e-6;
   const faceH = Math.hypot(chin.x - midEyeX, chin.y - midEyeY) || 1e-6;
 
-  // 画面座標: x増=右、y増=下。アバター yaw+: 左向き / pitch+: 下向き に合わせる
   const yawRaw = ((nose.x - midEyeX) / eyeDist) * YAW_GAIN;
   const pitchRaw = ((nose.y - midEyeY) / faceH) * PITCH_GAIN;
-  return { yaw: yawRaw, pitch: pitchRaw };
+  return { yaw: yawRaw, pitch: pitchRaw, noseX: nose.x };
+}
+
+function noseX(lm) {
+  return lm?.[1]?.x ?? 0.5;
+}
+
+/**
+ * @param {object} slot
+ * @param {{ yaw: number, pitch: number } | null} raw
+ */
+function updateSlot(slot, raw) {
+  if (!raw) {
+    slot.lost += 1;
+    if (slot.lost >= LOST_FRAMES) {
+      slot.tracking = false;
+      slot.calib = null;
+    }
+    return;
+  }
+  slot.lost = 0;
+  if (!slot.calib) {
+    slot.calib = { yaw: raw.yaw, pitch: raw.pitch };
+  }
+  const yaw = clamp(raw.yaw - slot.calib.yaw, -CLAMP, CLAMP);
+  const pitch = clamp(raw.pitch - slot.calib.pitch, -CLAMP, CLAMP);
+  slot.yaw = lerp(slot.yaw, yaw, SMOOTH);
+  slot.pitch = lerp(slot.pitch, pitch, SMOOTH);
+  slot.tracking = true;
+}
+
+function emitPose() {
+  const p1 = faceSlots.p1;
+  const p2 = faceSlots.p2;
+  // 単一表示時のトップレベル互換値は表示スロット基準
+  const primary = runtimeOpts.displayMode === 'p2' ? p2 : p1;
+  window.avatarFaceAPI?.sendPose?.({
+    yaw: primary.yaw,
+    pitch: primary.pitch,
+    tracking: p1.tracking || p2.tracking,
+    faceCount: (p1.tracking ? 1 : 0) + (p2.tracking ? 1 : 0),
+    p1: { yaw: p1.yaw, pitch: p1.pitch, tracking: p1.tracking },
+    p2: { yaw: p2.yaw, pitch: p2.pitch, tracking: p2.tracking },
+  });
 }
 
 async function ensureLandmarker(config) {
-  const key = `${config.visionModuleUrl}|${config.wasmRoot}|${config.modelAssetPath}`;
+  const numFaces = runtimeOpts.numFaces;
+  const key = `${config.visionModuleUrl}|${config.wasmRoot}|${config.modelAssetPath}|n${numFaces}`;
   if (landmarker && landmarkerKey === key) return landmarker;
   if (landmarker) {
     try { landmarker.close(); } catch (_) { /* */ }
@@ -76,7 +150,7 @@ async function ensureLandmarker(config) {
       delegate: 'GPU',
     },
     runningMode: 'VIDEO',
-    numFaces: 1,
+    numFaces,
   };
   try {
     landmarker = await FaceLandmarker.createFromOptions(vision, options);
@@ -148,49 +222,51 @@ function tick() {
     return;
   }
 
-  const faces = result?.faceLandmarks;
-  if (!faces || !faces.length) {
-    lostCount += 1;
-    if (lostCount >= LOST_FRAMES) {
-      window.avatarFaceAPI?.sendPose?.({ yaw: yawSmoothed, pitch: pitchSmoothed, tracking: false });
+  const faces = result?.faceLandmarks || [];
+  const ranked = faces
+    .map((lm) => ({ lm, x: noseX(lm), raw: computeRawPose(lm) }))
+    .filter((f) => f.raw)
+    .sort((a, b) => a.x - b.x);
+
+  const mode = runtimeOpts.displayMode;
+  if (mode === 'p1' || mode === 'p2') {
+    // 1顔モード: 検出顔を表示スロットへ。他方はロスト扱い
+    const only = ranked[0]?.raw || null;
+    if (mode === 'p1') {
+      updateSlot(faceSlots.p1, only);
+      updateSlot(faceSlots.p2, null);
+    } else {
+      updateSlot(faceSlots.p1, null);
+      updateSlot(faceSlots.p2, only);
     }
-    return;
+  } else {
+    // both: 左=p1 右=p2。swapAssign で入れ替え
+    let left = ranked[0] || null;
+    let right = ranked[1] || null;
+    if (runtimeOpts.swapAssign) {
+      const tmp = left;
+      left = right;
+      right = tmp;
+    }
+    updateSlot(faceSlots.p1, left?.raw || null);
+    updateSlot(faceSlots.p2, right?.raw || null);
   }
-
-  lostCount = 0;
-  const raw = computeRawPose(faces[0]);
-  if (!raw) return;
-
-  if (!calib) {
-    calib = { yaw: raw.yaw, pitch: raw.pitch };
-  }
-
-  const yaw = clamp(raw.yaw - calib.yaw, -CLAMP, CLAMP);
-  const pitch = clamp(raw.pitch - calib.pitch, -CLAMP, CLAMP);
-  yawSmoothed = lerp(yawSmoothed, yaw, SMOOTH);
-  pitchSmoothed = lerp(pitchSmoothed, pitch, SMOOTH);
-
-  window.avatarFaceAPI?.sendPose?.({
-    yaw: yawSmoothed,
-    pitch: pitchSmoothed,
-    tracking: true,
-  });
+  emitPose();
 }
 
 async function applyConfig(config) {
   stopLoop();
-  calib = null;
-  yawSmoothed = 0;
-  pitchSmoothed = 0;
-  lostCount = 0;
+  faceSlots.p1 = emptySlotState();
+  faceSlots.p2 = emptySlotState();
   lastVideoTime = -1;
+  runtimeOpts = resolveFaceOpts(config);
 
   if (!config || config.enabled === false) {
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
       stream = null;
     }
-    window.avatarFaceAPI?.sendPose?.({ yaw: 0, pitch: 0, tracking: false });
+    emitPose();
     return;
   }
 
@@ -202,7 +278,7 @@ async function applyConfig(config) {
   } catch (err) {
     console.error('[avatar-face-capture]', err);
     window.avatarFaceAPI?.sendError?.(String(err?.message || err));
-    window.avatarFaceAPI?.sendPose?.({ yaw: 0, pitch: 0, tracking: false });
+    emitPose();
   }
 }
 

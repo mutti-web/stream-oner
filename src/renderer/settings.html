@@ -870,10 +870,19 @@
       <div class="app-field app-field-row">
         <div>
           <div class="app-label">顔向きトラッキングを有効化</div>
-          <div class="app-desc">カメラで yaw/pitch を推定し、Pixi オーバーレイ（/overlay-pixi）のパララックスに反映します。現行 DOM オーバーレイには影響しません。カメラ許可が必要です</div>
+          <div class="app-desc">カメラで yaw/pitch を推定し Pixi（/overlay-pixi）に反映。検出数は表示モード連動（両方=最大2顔、1人のみ=1顔）。現行 DOM には影響しません</div>
         </div>
         <div class="app-toggle-controls">
           <md-switch id="av-face-track" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">左右の割り当てを入れ替え</div>
+          <div class="app-desc">1カメラで2顔検出時、画面左=1人目 / 右=2人目が逆のときに使います</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="av-face-assign-swap" icons show-only-selected-icon></md-switch>
         </div>
       </div>
       <div class="app-field app-stack-md">

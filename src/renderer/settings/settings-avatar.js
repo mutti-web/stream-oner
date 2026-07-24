@@ -42,6 +42,7 @@ function buildAvatarPayload(opts = {}) {
     smileDetectEnabled: document.getElementById('av-smile-detect').checked,
     smileSensitivity: readMdNum(document.getElementById('av-smile-sensitivity'), 50),
     faceTrackEnabled: !!document.getElementById('av-face-track')?.checked,
+    faceAssignSwap: !!document.getElementById('av-face-assign-swap')?.checked,
     cameraDeviceId: readMdValue(document.getElementById('av-camera')) || '',
   };
   if (window.avatarSettingsUI) {
@@ -183,6 +184,8 @@ async function initAvatar() {
   setMdFieldValue(document.getElementById('av-smile-sensitivity'), cfg.smileSensitivity ?? 50);
   const faceSw = document.getElementById('av-face-track');
   if (faceSw) faceSw.checked = !!cfg.faceTrackEnabled;
+  const swapSw = document.getElementById('av-face-assign-swap');
+  if (swapSw) swapSw.checked = !!cfg.faceAssignSwap;
   setMdFieldValue(document.getElementById('av-obs-url'), cfg.obsUrl || 'http://127.0.0.1:3003/overlay');
   setMdFieldValue(
     document.getElementById('av-obs-url-pixi'),
@@ -238,6 +241,7 @@ function bindAvatarActions() {
     updateFaceTrackStatus();
     debouncedAvatar();
   });
+  document.getElementById('av-face-assign-swap')?.addEventListener('change', () => debouncedAvatar());
   document.getElementById('av-camera')?.addEventListener('change', () => debouncedAvatar());
 
   function closestActionButton(ev, selector) {
