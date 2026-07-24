@@ -849,6 +849,22 @@
       </div>
     </div>
 
+    <div class="app-section-title">Pixi オーバーレイ（実験・顔トラッキング対応）</div>
+    <div class="app-card">
+      <div class="app-field app-stack-sm">
+        <div class="app-desc">
+          口パクに加え、顔向き・髪スプリング・LookAt などを使う場合はこちらを OBS ブラウザソースに指定します。
+          現行の DOM 専用 URL（<code>/overlay</code>）はそのまま使えます。
+        </div>
+        <div class="app-label">Pixi URL（OBS 用・HUD 非表示）</div>
+        <div class="url-row">
+          <md-outlined-text-field id="av-obs-url-pixi" readonly class="app-grow"></md-outlined-text-field>
+          <md-outlined-button id="av-copy-url-pixi">コピー</md-outlined-button>
+        </div>
+        <div class="app-hint">顔トラッキングは下の「顔トラッキング」で ON（既定 OFF）。LookAt は各スロットのレイヤー設定から有効化できます。</div>
+      </div>
+    </div>
+
     <div class="app-section-title">顔トラッキング（Pixi・任意・デフォルトOFF）</div>
     <div class="app-card">
       <div class="app-field app-field-row">
@@ -924,17 +940,12 @@
           <div class="app-hint obs-suite-hint">
             通常は統合 URL を使用。<a href="#" class="app-inline-link" id="av-go-suite-obs">レイアウトへ</a>
           </div>
-          <div class="app-label">アバター専用 URL（単体配置用・幅・高さは OBS ソース側で指定）</div>
+          <div class="app-label">アバター専用 URL（DOM・単体配置用）</div>
           <div class="url-row">
             <md-outlined-text-field id="av-obs-url" readonly></md-outlined-text-field>
             <md-outlined-button id="av-copy-url">コピー</md-outlined-button>
           </div>
-          <div class="app-label">Pixi 実験 URL（顔トラッキング・髪スプリング）</div>
-          <div class="url-row">
-            <md-outlined-text-field id="av-obs-url-pixi" readonly></md-outlined-text-field>
-            <md-outlined-button id="av-copy-url-pixi">コピー</md-outlined-button>
-          </div>
-          <div class="app-hint">OBS では末尾に <code>?hud=0</code> を付けて HUD を隠してください</div>
+          <div class="app-hint">Pixi URL は上の「Pixi オーバーレイ」セクションにあります</div>
         </div>
       </div>
     </details>

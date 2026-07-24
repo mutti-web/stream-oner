@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * P1+ Pixi アバターオーバーレイ
- * - 現行 DOM と同じ init / audio WS
- * - レイヤー PNG → Sprite、口パク・母音・笑い、p1/p2、displayMode
- * - pose WS（MediaPipe）+ HUD 手動（デバッグ）。OBS: ?hud=0
- * - hair spring / rigType（human | integrated）
+ * Pixi アバターオーバーレイ（P1–P5）
+ * - init / audio / pose WS
+ * - レイヤー PNG、口パク、p1/p2、髪スプリング、rigType
+ * - LookAt / sine / dragLag / カスタム親追従（DOM 相当）
+ * OBS: ?hud=0
  */
 
 const WS_URL = 'ws://127.0.0.1:3003';
@@ -21,6 +21,7 @@ const LEVEL_LERP_OPEN = AC.LEVEL_LERP_OPEN ?? 0.38;
 const LEVEL_LERP_CLOSE = AC.LEVEL_LERP_CLOSE ?? 0.14;
 const SLOT_REF_W = AC.SLOT_REF_W ?? 960;
 const SLOT_REF_H = AC.SLOT_REF_H ?? 420;
+const SINE_ROT_PER_AMP = AC.SINE_ROT_PER_AMP ?? 0.006;
 
 const MULTIPLIERS_HUMAN = {
   body: 0.15,
@@ -110,7 +111,26 @@ function layerXY(cfg, name) {
     x: Number(L?.offsetX) || 0,
     y: Number(L?.offsetY) || 0,
     scaleMul: Number(L?.scale) > 0 ? Number(L.scale) : 1,
+    drag: !!L?.drag,
+    sine: L?.sine || null,
   };
+}
+
+function sineOffset(layer, tMs) {
+  const s = layer?.sine;
+  if (!s || !s.enabled) return { x: 0, y: 0, rot: 0 };
+  const w = (2 * Math.PI * tMs) / (Math.max(800, s.periodMs) || 4000);
+  const p = s.phase || 0;
+  const amp = s.amp || 0;
+  return {
+    x: 0,
+    y: amp * Math.sin(w + p),
+    rot: amp * SINE_ROT_PER_AMP * Math.sin(w + p * 0.7),
+  };
+}
+
+function isAttachChildAnchor(anchor) {
+  return anchor === 'eyes' || anchor === 'mouth' || anchor === 'nose';
 }
 
 function syncHudLabels() {
@@ -317,6 +337,7 @@ function createEmptySlot(id) {
     cfg: null,
     assets: {},
     sprites: {},
+    customItems: [],
     useLayers: false,
     speaking: false,
     laughing: false,
@@ -330,6 +351,17 @@ function createEmptySlot(id) {
     smoothJiggle: 1,
     hair1Spring: makeSpring(),
     hair2Spring: makeSpring(),
+    rigX: 0,
+    rigY: 0,
+    rigRot: 0,
+    attachX: 0,
+    attachY: 0,
+    attachRot: 0,
+    pupilX: 0,
+    pupilY: 0,
+    pupilTargetX: 0,
+    pupilTargetY: 0,
+    pupilNextMoveAt: 0,
   };
 }
 
@@ -394,10 +426,16 @@ async function rebuildSlot(id, data) {
       ? await buildLayerSprite(mouthUrl, layerZ(cfg, 'mouth'), null, 0xee6c4d)
       : null;
     s.sprites.nose = await buildLayerSprite(a.nose, layerZ(cfg, 'nose'), null, 0xffb703);
+    s.sprites.pupil = await buildLayerSprite(
+      a['eyes-pupil'],
+      layerZ(cfg, 'eyes') + 1,
+      null,
+      0xffffff,
+    );
 
     for (const [name, sp] of Object.entries(s.sprites)) {
       if (!sp) continue;
-      const lo = layerXY(cfg, name);
+      const lo = layerXY(cfg, name === 'pupil' ? 'eyes' : name);
       sp.position.set(lo.x, lo.y);
       if (sp.texture && lo.scaleMul !== 1) fitSprite(sp, SLOT_TARGET_H, lo.scaleMul);
       s.root.addChild(sp);
@@ -408,7 +446,7 @@ async function rebuildSlot(id, data) {
     if (s.sprites.composite) s.root.addChild(s.sprites.composite);
   }
 
-  // custom layers
+  s.customItems = [];
   for (const cl of cfg.customLayers || []) {
     const assetKey = `custom-${cl.id}`;
     const url = a[assetKey];
@@ -417,8 +455,10 @@ async function rebuildSlot(id, data) {
     if (!sp) continue;
     sp.position.set(Number(cl.offsetX) || 0, Number(cl.offsetY) || 0);
     const sc = Number(cl.scale);
-    if (Number.isFinite(sc) && sc > 0 && sp.scale) sp.scale.set(sp.scale.x * sc);
-    s.sprites[`custom-${cl.id}`] = sp;
+    if (Number.isFinite(sc) && sc > 0 && sp.scale) {
+      fitSprite(sp, SLOT_TARGET_H, sc);
+    }
+    s.customItems.push({ cfg: cl, sp, assetKey });
     s.root.addChild(sp);
   }
 
@@ -522,6 +562,99 @@ async function setSpriteUrl(sp, url) {
   fitSprite(sp, SLOT_TARGET_H);
 }
 
+function updateLookAt(s, tNow) {
+  const cfg = s.cfg || {};
+  const pupil = s.sprites.pupil;
+  if (!pupil) return;
+  const max = Number(cfg.pupilOffsetMax) || 4;
+  if (!cfg.lookAtEnabled || !hasAssetUrl(s.assets, 'eyes-pupil')) {
+    pupil.visible = false;
+    return;
+  }
+  pupil.visible = true;
+  if (tNow >= (s.pupilNextMoveAt || 0)) {
+    s.pupilTargetX = (Math.random() * 2 - 1) * max;
+    s.pupilTargetY = (Math.random() * 2 - 1) * max * 0.65;
+    s.pupilNextMoveAt = tNow + 1800 + Math.random() * 3200;
+  }
+  s.pupilX = lerp(s.pupilX || 0, s.pupilTargetX || 0, 0.06);
+  s.pupilY = lerp(s.pupilY || 0, s.pupilTargetY || 0, 0.06);
+}
+
+function getAnchorLocal(s, anchor, tNow, faceS, h1, h2) {
+  const layers = s.cfg?.layers || {};
+  switch (anchor) {
+    case 'rig':
+      return { x: s.rigX, y: s.rigY, rot: s.rigRot, scale: 1 };
+    case 'attach':
+      return { x: s.attachX, y: s.attachY, rot: s.attachRot, scale: 1 };
+    case 'body': {
+      const bodyS = sineOffset(layers.body || {}, tNow);
+      return {
+        x: (layers.body?.offsetX || 0),
+        y: (layers.body?.offsetY || 0) + bodyS.y,
+        rot: bodyS.rot,
+        scale: layers.body?.scale || 1,
+      };
+    }
+    case 'face':
+      return {
+        x: (layers.face?.offsetX || 0),
+        y: (layers.face?.offsetY || 0) + faceS.y,
+        rot: faceS.rot,
+        scale: layers.face?.scale || 1,
+      };
+    case 'hair1':
+      return {
+        x: (layers.hair1?.offsetX || 0),
+        y: (layers.hair1?.offsetY || 0) + h1.y,
+        rot: h1.rot,
+        scale: layers.hair1?.scale || 1,
+      };
+    case 'hair2':
+      return {
+        x: (layers.hair2?.offsetX || 0),
+        y: (layers.hair2?.offsetY || 0) + h2.y,
+        rot: h2.rot,
+        scale: layers.hair2?.scale || 1,
+      };
+    case 'eyes':
+      return {
+        x: (layers.eyes?.offsetX || 0),
+        y: (layers.eyes?.offsetY || 0),
+        rot: 0,
+        scale: layers.eyes?.scale || 1,
+      };
+    case 'mouth':
+      return {
+        x: (layers.mouth?.offsetX || 0),
+        y: (layers.mouth?.offsetY || 0),
+        rot: 0,
+        scale: layers.mouth?.scale || 1,
+      };
+    case 'nose':
+      return {
+        x: (layers.nose?.offsetX || 0),
+        y: (layers.nose?.offsetY || 0) + faceS.y,
+        rot: faceS.rot,
+        scale: layers.nose?.scale || 1,
+      };
+    default:
+      return { x: 0, y: 0, rot: 0, scale: 1 };
+  }
+}
+
+function placeSprite(sp, x, y, rot, baseScaleX, baseScaleY) {
+  if (!sp) return;
+  sp.position.set(x, y);
+  if (typeof rot === 'number') sp.rotation = rot;
+  if (baseScaleX != null && sp.scale) {
+    const sx = Math.sign(sp.scale.x) || 1;
+    const sy = Math.sign(sp.scale.y) || 1;
+    sp.scale.set(sx * Math.abs(baseScaleX), sy * Math.abs(baseScaleY ?? baseScaleX));
+  }
+}
+
 function applySlotVisuals(s, tNow) {
   if (!s?.root) return;
   const active = s.speaking || s.laughing;
@@ -533,60 +666,157 @@ function applySlotVisuals(s, tNow) {
     s.nextBlinkAt = tNow + naturalBlinkDelayMs(s.cfg);
   }
 
+  const ox = pose.yaw * YAW_PX;
+  const oy = pose.pitch * PITCH_PX;
+  const Sp = s.sprites;
+  const mult = multipliersFor(s.cfg);
+  const layers = s.cfg?.layers || {};
+
   if (s.useLayers) {
     const mouthUrl = pickMouthUrl(s);
     const eyesUrl = pickEyesUrl(s, tNow);
-    if (s.sprites.mouth && mouthUrl) setSpriteUrl(s.sprites.mouth, mouthUrl);
-    if (s.sprites.eyes && eyesUrl) setSpriteUrl(s.sprites.eyes, eyesUrl);
+    if (Sp.mouth && mouthUrl) setSpriteUrl(Sp.mouth, mouthUrl);
+    if (Sp.eyes && eyesUrl) setSpriteUrl(Sp.eyes, eyesUrl);
+
+    const bodyS = sineOffset(layers.body || {}, tNow);
+    const faceS = sineOffset(layers.face || {}, tNow);
+    const h1S = sineOffset(layers.hair1 || {}, tNow);
+    const h2S = sineOffset(layers.hair2 || {}, tNow);
+
+    s.rigX = lerp(s.rigX, (layers.body?.offsetX || 0), 0.35);
+    s.rigY = lerp(s.rigY, (layers.body?.offsetY || 0) + bodyS.y, 0.35);
+    s.rigRot = lerp(s.rigRot, bodyS.rot, 0.35);
+
+    const dragOn = !!(layers.eyes?.drag || layers.mouth?.drag || layers.nose?.drag);
+    if (dragOn) {
+      const lag = Math.min(0.95, Math.max(0.05, s.cfg.dragLag ?? 0.35));
+      s.attachX = lerp(s.attachX, s.rigX, lag);
+      s.attachY = lerp(s.attachY, s.rigY, lag);
+      s.attachRot = lerp(s.attachRot, s.rigRot, lag);
+    } else {
+      s.attachX = s.rigX;
+      s.attachY = s.rigY;
+      s.attachRot = s.rigRot;
+    }
+
+    updateLookAt(s, tNow);
 
     const jiggle = getJiggleScale(s);
-    if (s.sprites.mouth?.scale && s.sprites.mouth.texture) {
-      const lo = layerXY(s.cfg, 'mouth');
-      fitSprite(s.sprites.mouth, SLOT_TARGET_H, lo.scaleMul);
-      const base = Math.abs(s.sprites.mouth.scale.x) || 1;
-      s.sprites.mouth.scale.set(base, base * jiggle);
-    }
-  } else if (s.sprites.composite) {
-    const url = pickCompositeUrl(s);
-    if (url) setSpriteUrl(s.sprites.composite, url);
-  }
+    const hairStrRaw = Number(s.cfg?.hairSpringStrength);
+    const hairStr = Number.isFinite(hairStrRaw) ? Math.max(0, Math.min(1, hairStrRaw)) : 0.55;
+    const audioBounce = ((s.smoothLevel ?? s.level ?? 0) / 100) * (2.2 + hairStr * 3.5);
 
-  const ox = pose.yaw * YAW_PX;
-  const oy = pose.pitch * PITCH_PX;
-  const L = s.sprites;
-  const mult = multipliersFor(s.cfg);
-  const put = (sp, name, extraX = 0, extraY = 0) => {
-    if (!sp) return;
-    const m = mult[name] ?? 1;
-    const lo = layerXY(s.cfg, name);
-    sp.position.set(lo.x + ox * m + extraX, lo.y + oy * m + extraY);
-  };
+    const placeRigChild = (sp, name, extraY, extraRot) => {
+      if (!sp) return;
+      const lo = layerXY(s.cfg, name);
+      const m = mult[name] ?? 1;
+      const bx = Math.abs(sp.scale?.x) || lo.scaleMul;
+      fitSprite(sp, SLOT_TARGET_H, lo.scaleMul);
+      const base = Math.abs(sp.scale.x) || bx;
+      placeSprite(
+        sp,
+        s.rigX + lo.x + ox * m,
+        s.rigY + lo.y + (extraY || 0) + oy * m,
+        s.rigRot + (extraRot || 0),
+        base,
+        base,
+      );
+    };
 
-  const hairStrRaw = Number(s.cfg?.hairSpringStrength);
-  const hairStr = Number.isFinite(hairStrRaw) ? Math.max(0, Math.min(1, hairStrRaw)) : 0.55;
-  const audioBounce = ((s.smoothLevel ?? s.level ?? 0) / 100) * (2.2 + hairStr * 3.5);
+    const placeAttachChild = (sp, name, extraY, extraRot, scaleYMul) => {
+      if (!sp) return;
+      const lo = layerXY(s.cfg, name);
+      const m = mult[name] ?? 1;
+      fitSprite(sp, SLOT_TARGET_H, lo.scaleMul);
+      const base = Math.abs(sp.scale.x) || lo.scaleMul;
+      placeSprite(
+        sp,
+        s.attachX + lo.x + ox * m,
+        s.attachY + lo.y + (extraY || 0) + oy * m,
+        s.attachRot + (extraRot || 0),
+        base,
+        base * (scaleYMul || 1),
+      );
+    };
 
-  if (s.useLayers) {
-    put(L.body, 'body');
-    put(L.face, 'face');
-    put(L.eyes, 'eyes');
-    put(L.mouth, 'mouth');
-    put(L.nose, 'nose');
+    placeRigChild(Sp.body, 'body', 0, 0);
+    placeRigChild(Sp.face, 'face', faceS.y, faceS.rot);
 
     const h1 = layerXY(s.cfg, 'hair1');
     const h2 = layerXY(s.cfg, 'hair2');
     const h1m = mult.hair1 ?? 0.45;
     const h2m = mult.hair2 ?? 0.35;
-    const t1x = h1.x + ox * h1m;
-    const t1y = h1.y + oy * h1m + audioBounce * 0.55;
-    const t2x = h2.x + ox * h2m;
-    const t2y = h2.y + oy * h2m + audioBounce;
+    const t1x = s.rigX + h1.x + ox * h1m;
+    const t1y = s.rigY + h1.y + h1S.y + oy * h1m + audioBounce * 0.55;
+    const t2x = s.rigX + h2.x + ox * h2m;
+    const t2y = s.rigY + h2.y + h2S.y + oy * h2m + audioBounce;
     stepSpring(s.hair1Spring, t1x, t1y, hairStr, HAIR_SPRING_DT);
     stepSpring(s.hair2Spring, t2x, t2y, hairStr * 0.85, HAIR_SPRING_DT);
-    if (L.hair1) L.hair1.position.set(s.hair1Spring.x, s.hair1Spring.y);
-    if (L.hair2) L.hair2.position.set(s.hair2Spring.x, s.hair2Spring.y);
-  } else {
-    put(L.composite, 'composite');
+    if (Sp.hair1) {
+      fitSprite(Sp.hair1, SLOT_TARGET_H, h1.scaleMul);
+      const base = Math.abs(Sp.hair1.scale.x) || 1;
+      placeSprite(Sp.hair1, s.hair1Spring.x, s.hair1Spring.y, s.rigRot + h1S.rot, base, base);
+    }
+    if (Sp.hair2) {
+      fitSprite(Sp.hair2, SLOT_TARGET_H, h2.scaleMul);
+      const base = Math.abs(Sp.hair2.scale.x) || 1;
+      placeSprite(Sp.hair2, s.hair2Spring.x, s.hair2Spring.y, s.rigRot + h2S.rot, base, base);
+    }
+
+    placeAttachChild(Sp.eyes, 'eyes', 0, 0, 1);
+    placeAttachChild(Sp.mouth, 'mouth', 0, 0, jiggle);
+    placeAttachChild(Sp.nose, 'nose', faceS.y, faceS.rot, 1);
+
+    if (Sp.pupil && Sp.pupil.visible) {
+      const lo = layerXY(s.cfg, 'eyes');
+      const m = mult.eyes ?? 1;
+      fitSprite(Sp.pupil, SLOT_TARGET_H, lo.scaleMul);
+      const base = Math.abs(Sp.pupil.scale.x) || lo.scaleMul;
+      placeSprite(
+        Sp.pupil,
+        s.attachX + lo.x + (s.pupilX || 0) + ox * m,
+        s.attachY + lo.y + (s.pupilY || 0) + oy * m,
+        s.attachRot,
+        base,
+        base,
+      );
+    }
+
+    for (const item of s.customItems || []) {
+      const cl = item.cfg;
+      const parent = getAnchorLocal(s, cl.parentAnchor || 'body', tNow, faceS, h1S, h2S);
+      let baseX = parent.x;
+      let baseY = parent.y;
+      let baseRot = parent.rot;
+      if (isAttachChildAnchor(cl.parentAnchor)) {
+        baseX += s.attachX;
+        baseY += s.attachY;
+        baseRot += s.attachRot;
+      } else if (cl.parentAnchor !== 'attach' && cl.parentAnchor !== 'rig') {
+        baseX += s.rigX;
+        baseY += s.rigY;
+        baseRot += s.rigRot;
+      }
+      const sc = (Number(cl.scale) > 0 ? Number(cl.scale) : 1) * (parent.scale || 1);
+      fitSprite(item.sp, SLOT_TARGET_H, sc);
+      const base = Math.abs(item.sp.scale.x) || sc;
+      placeSprite(
+        item.sp,
+        baseX + (Number(cl.offsetX) || 0) + ox * 0.7,
+        baseY + (Number(cl.offsetY) || 0) + oy * 0.7,
+        baseRot,
+        base,
+        base,
+      );
+    }
+  } else if (Sp.composite) {
+    const url = pickCompositeUrl(s);
+    if (url) setSpriteUrl(Sp.composite, url);
+    const jiggle = getJiggleScale(s);
+    const m = mult.composite ?? 0.7;
+    fitSprite(Sp.composite, SLOT_TARGET_H, 1);
+    const base = Math.abs(Sp.composite.scale.x) || 1;
+    placeSprite(Sp.composite, ox * m, oy * m, 0, base, base * jiggle);
   }
 }
 
