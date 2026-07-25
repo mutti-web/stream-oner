@@ -123,6 +123,7 @@ class AvatarManager extends EventEmitter {
     this._face = new AvatarFaceManager(
       (pose) => this._onFacePose(pose),
       (msg) => this._updateStatus({ faceError: msg }),
+      (preview) => this._onFacePreview(preview),
     );
 
     this._status = { serverRunning: false, audioRunning: false, faceRunning: false, error: null, faceError: null };
@@ -439,6 +440,24 @@ class AvatarManager extends EventEmitter {
       this._lastPoseSentAt = now;
       this._broadcast({ type: 'pose', ...next });
     }
+  }
+
+  /** 設定画面向け: 実写なしのランドマーク点群 */
+  _onFacePreview(preview) {
+    if (!this._store.get(K.enabled, false)) return;
+    if (!this._store.get(K.faceTrackEnabled, false)) return;
+    this.emit('face-preview', preview || {});
+  }
+
+  /** 正面を現在の向きとして記憶し直す */
+  recalibrateFace() {
+    if (!this._face?.isRunning()) {
+      return { success: false, error: '顔トラッキングが稼働していません' };
+    }
+    const ok = this._face.recalibrate();
+    return ok
+      ? { success: true }
+      : { success: false, error: '再キャリブレートに失敗しました' };
   }
 
   _clearAudioFlushTimer() {

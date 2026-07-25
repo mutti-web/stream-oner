@@ -16,10 +16,12 @@ class AvatarFaceManager {
   /**
    * @param {(pose: { yaw: number, pitch: number, tracking: boolean }) => void} onPose
    * @param {(message: string) => void} [onError]
+   * @param {(preview: object) => void} [onPreview]
    */
-  constructor(onPose, onError) {
+  constructor(onPose, onError, onPreview) {
     this._onPose = onPose;
     this._onError = onError || (() => {});
+    this._onPreview = onPreview || (() => {});
     this._window = null;
     this._config = null;
     this._ipcBound = false;
@@ -31,6 +33,10 @@ class AvatarFaceManager {
     ipcMain.on('avatar-face-pose', (event, data) => {
       if (!this._window || event.sender !== this._window.webContents) return;
       this._onPose(data || {});
+    });
+    ipcMain.on('avatar-face-preview', (event, data) => {
+      if (!this._window || event.sender !== this._window.webContents) return;
+      this._onPreview(data || {});
     });
     ipcMain.on('avatar-face-error', (event, message) => {
       if (!this._window || event.sender !== this._window.webContents) return;
@@ -89,6 +95,13 @@ class AvatarFaceManager {
     this._window.on('closed', () => { this._window = null; });
     await this._window.loadURL(this._config.capturePageUrl);
     this._window.webContents.send('avatar-face-config', this._config);
+  }
+
+  /** 現在の向きを正面として再サンプリングするよう capture に指示 */
+  recalibrate() {
+    if (!this._window || this._window.isDestroyed()) return false;
+    this._window.webContents.send('avatar-face-recalibrate');
+    return true;
   }
 
   stop() {

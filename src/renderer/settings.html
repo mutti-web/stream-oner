@@ -892,6 +892,18 @@
         <md-outlined-select id="av-camera" class="full-width" label="使用カメラ">
           <md-select-option value=""><div slot="headline">— 既定カメラ —</div></md-select-option>
         </md-outlined-select>
+        <div class="av-face-preview-wrap" id="av-face-preview-wrap" aria-label="顔トラッキング プライバシープレビュー">
+          <canvas id="av-face-preview" width="480" height="270"></canvas>
+          <div class="av-face-preview-caption" id="av-face-preview-caption">
+            実写は表示しません。頭の向き・表情と表示名で割り当てを確認できます。
+          </div>
+        </div>
+        <div class="av-face-calib-row">
+          <md-filled-tonal-button type="button" id="av-face-calib">
+            正面を記憶
+          </md-filled-tonal-button>
+          <div class="app-desc">カメラの前で正面を向いて押し、その向きを「正面」として覚えさせます（約0.3秒サンプリング）。</div>
+        </div>
         <div class="app-desc" id="av-face-status">顔トラッキング: オフ</div>
       </div>
     </div>

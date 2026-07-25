@@ -260,23 +260,24 @@ function applyFacePose(msg) {
     updateFaceStatusUi();
     return;
   }
+  const soften = (prev, nextYaw, nextPitch, tracking) => {
+    if (tracking) {
+      return { yaw: Number(nextYaw) || 0, pitch: Number(nextPitch) || 0, tracking: true };
+    }
+    // ロスト中は正面へ戻す（capture 側でも戻すが、描画側の保険）
+    const yaw = lerp(prev?.yaw || 0, 0, 0.22);
+    const pitch = lerp(prev?.pitch || 0, 0, 0.22);
+    return {
+      yaw: Math.abs(yaw) < 0.008 ? 0 : yaw,
+      pitch: Math.abs(pitch) < 0.008 ? 0 : pitch,
+      tracking: false,
+    };
+  };
   if (msg.p1 || msg.p2) {
-    slotPose.p1 = {
-      yaw: Number(msg.p1?.yaw) || 0,
-      pitch: Number(msg.p1?.pitch) || 0,
-      tracking: !!msg.p1?.tracking,
-    };
-    slotPose.p2 = {
-      yaw: Number(msg.p2?.yaw) || 0,
-      pitch: Number(msg.p2?.pitch) || 0,
-      tracking: !!msg.p2?.tracking,
-    };
+    slotPose.p1 = soften(slotPose.p1, msg.p1?.yaw, msg.p1?.pitch, !!msg.p1?.tracking);
+    slotPose.p2 = soften(slotPose.p2, msg.p2?.yaw, msg.p2?.pitch, !!msg.p2?.tracking);
   } else {
-    const one = {
-      yaw: Number(msg.yaw) || 0,
-      pitch: Number(msg.pitch) || 0,
-      tracking: !!msg.tracking,
-    };
+    const one = soften(slotPose.p1, msg.yaw, msg.pitch, !!msg.tracking);
     slotPose.p1 = { ...one };
     slotPose.p2 = { ...one };
   }
@@ -694,6 +695,11 @@ async function applyInit(msg) {
   if (!faceTrackEnabled) {
     pose.tracking = false;
     pose.fromFace = false;
+    pose.yaw = 0;
+    pose.pitch = 0;
+    slotPose.p1 = { yaw: 0, pitch: 0, tracking: false };
+    slotPose.p2 = { yaw: 0, pitch: 0, tracking: false };
+    syncHudLabels();
   }
   await rebuildSlot('p1', c.p1 || {});
   await rebuildSlot('p2', c.p2 || {});

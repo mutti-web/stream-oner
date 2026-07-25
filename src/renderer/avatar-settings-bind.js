@@ -314,6 +314,13 @@
         const el = row.querySelector('[data-custom-k="' + k + '"]');
         if (!el) return '';
         if (el.tagName === 'MD-SWITCH') return !!el.checked;
+        // md-outlined-select は value が遅延するとき selected オプションから読む
+        if (el.tagName === 'MD-OUTLINED-SELECT') {
+          const v = window.appUI?.readMdFieldValue?.(el) ?? el.value ?? '';
+          if (v) return v;
+          const sel = el.querySelector('md-select-option[selected], md-select-option[aria-selected="true"]');
+          return sel?.value || sel?.getAttribute('value') || '';
+        }
         return window.appUI?.readMdFieldValue?.(el) ?? el.value ?? '';
       };
       const lookRaw = String(read('look') ?? '').trim();
@@ -344,15 +351,18 @@
 
   function customLayerRow(prefix, layer) {
     const id = layer?.id || ('cl-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5));
+    const parent = CUSTOM_PARENTS.some(([v]) => v === layer?.parentAnchor)
+      ? layer.parentAnchor
+      : 'body';
     const parentOpts = CUSTOM_PARENTS.map(([v, label]) =>
-      '<md-select-option value="' + v + '"' + (layer?.parentAnchor === v ? ' selected' : '') +
+      '<md-select-option value="' + v + '"' + (parent === v ? ' selected' : '') +
       '><div slot="headline">' + esc(label) + '</div></md-select-option>'
     ).join('');
     return (
       '<div class="app-inset-block av-custom-layer-row app-stack-sm" data-custom-row data-custom-id="' + esc(id) + '">' +
         '<div class="app-grid-2">' +
           '<md-outlined-text-field label="名前" data-custom-k="name" value="' + esc(layer?.name || 'カスタム') + '"></md-outlined-text-field>' +
-          '<md-outlined-select label="親部位" data-custom-k="parent">' + parentOpts + '</md-outlined-select>' +
+          '<md-outlined-select label="親部位" data-custom-k="parent" value="' + esc(parent) + '">' + parentOpts + '</md-outlined-select>' +
         '</div>' +
         '<div class="url-row">' +
           '<md-outlined-text-field readonly data-custom-k="path" placeholder="PNG パス..." class="app-grow" value="' + esc(layer?.path || '') + '"></md-outlined-text-field>' +
@@ -525,6 +535,8 @@
 
   function isFieldVisible(el) {
     if (!el || !el.isConnected) return false;
+    // type=hidden は UA で display:none だが、収集対象として常に含める
+    if (el.tagName === 'INPUT' && el.type === 'hidden') return true;
     let node = el;
     while (node && node !== document.body) {
       if (node.hidden) return false;
@@ -539,9 +551,16 @@
   function collectForm(prefix) {
     syncCustomLayersJson(prefix);
     const data = {};
+    const jsonKey = prefix + '_custom_layers_json';
     document.querySelectorAll('[data-f^="' + prefix + '_"]').forEach((el) => {
+      const key = el.getAttribute('data-f');
+      // カスタム部位 JSON は折りたたみ内の hidden でも必ず保存する
+      if (key === jsonKey) {
+        data[key] = el.value ?? '';
+        return;
+      }
       if (!isFieldVisible(el)) return;
-      data[el.getAttribute('data-f')] = readFieldValue(el);
+      data[key] = readFieldValue(el);
     });
     return data;
   }

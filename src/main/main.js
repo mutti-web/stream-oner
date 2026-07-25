@@ -1748,6 +1748,8 @@ function setupIpcHandlers() {
   });
   ipcMain.handle('get-avatar-status', () =>
     avatarManager?.getStatus() ?? { serverRunning: false, audioRunning: false });
+  ipcMain.handle('recalibrate-avatar-face', () =>
+    avatarManager?.recalibrateFace() ?? { success: false, error: 'AvatarManager 未初期化' });
   ipcMain.handle('open-avatar-preview', () => createAvatarPreviewWindow());
 
   ipcMain.handle('obs-connect', async () => {
@@ -1951,6 +1953,15 @@ function setupAvatarBridge() {
       return;
     }
     settingsWindow.webContents.send('avatar-audio-levels', levels);
+  });
+  avatarManager.on('face-preview', (preview) => {
+    if (!settingsWindow || settingsWindow.isDestroyed()) return;
+    try {
+      if (!settingsWindow.isVisible() || settingsWindow.isMinimized()) return;
+    } catch (_) {
+      return;
+    }
+    settingsWindow.webContents.send('avatar-face-preview', preview);
   });
 }
 

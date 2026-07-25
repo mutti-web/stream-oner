@@ -12,7 +12,32 @@ const YAW_GAIN = 2.4;
 const PITCH_GAIN = 2.8;
 const CLAMP = 1;
 const SMOOTH = 0.28;
+/** 見失ったあとに正面へ戻す速さ */
+const RETURN_SMOOTH = 0.2;
 const LOST_FRAMES = 12;
+/** 再検出直後、このフレーム数の平均を「正面」とする */
+const CALIB_FRAMES = 10;
+/** 設定プレビュー用ランドマーク送信間隔（ms）。実写は送らない */
+const PREVIEW_EVERY_MS = 80;
+
+/**
+ * MediaPipe 顔輪郭＋目・口の代表点（実写なしのマーキング用）。
+ * @see https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/modules/face_geometry/data/canonical_face_model_uv_visualization.png
+ */
+const PREVIEW_LANDMARK_IDX = [
+  // face oval
+  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365,
+  379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93,
+  234, 127, 162, 21, 54, 103, 67, 109,
+  // left eye
+  33, 160, 158, 133, 153, 144,
+  // right eye
+  362, 385, 387, 263, 373, 380,
+  // lips outer
+  61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146,
+];
+
+let lastPreviewSentAt = 0;
 
 /** @type {import('@mediapipe/tasks-vision').FaceLandmarker | null} */
 let landmarker = null;
@@ -51,6 +76,7 @@ function emptySlotState() {
     pitch: 0,
     tracking: false,
     calib: null,
+    calibSamples: [],
     lost: 0,
   };
 }
@@ -66,6 +92,24 @@ function clamp(v, lo, hi) {
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
+}
+
+function averagePose(samples) {
+  const n = samples.length || 1;
+  let yaw = 0;
+  let pitch = 0;
+  for (const s of samples) {
+    yaw += s.yaw;
+    pitch += s.pitch;
+  }
+  return { yaw: yaw / n, pitch: pitch / n };
+}
+
+function returnSlotToRest(slot) {
+  slot.yaw = lerp(slot.yaw, 0, RETURN_SMOOTH);
+  slot.pitch = lerp(slot.pitch, 0, RETURN_SMOOTH);
+  if (Math.abs(slot.yaw) < 0.008) slot.yaw = 0;
+  if (Math.abs(slot.pitch) < 0.008) slot.pitch = 0;
 }
 
 /**
@@ -102,12 +146,25 @@ function updateSlot(slot, raw) {
     if (slot.lost >= LOST_FRAMES) {
       slot.tracking = false;
       slot.calib = null;
+      slot.calibSamples = [];
+      returnSlotToRest(slot);
     }
     return;
   }
   slot.lost = 0;
   if (!slot.calib) {
-    slot.calib = { yaw: raw.yaw, pitch: raw.pitch };
+    if (!Array.isArray(slot.calibSamples)) slot.calibSamples = [];
+    slot.calibSamples.push({ yaw: raw.yaw, pitch: raw.pitch });
+    const avg = averagePose(slot.calibSamples);
+    // キャリブ確定前も仮の正面（移動平均）からの相対値で動かす
+    slot.yaw = lerp(slot.yaw, clamp(raw.yaw - avg.yaw, -CLAMP, CLAMP), SMOOTH);
+    slot.pitch = lerp(slot.pitch, clamp(raw.pitch - avg.pitch, -CLAMP, CLAMP), SMOOTH);
+    slot.tracking = true;
+    if (slot.calibSamples.length >= CALIB_FRAMES) {
+      slot.calib = avg;
+      slot.calibSamples = [];
+    }
+    return;
   }
   const yaw = clamp(raw.yaw - slot.calib.yaw, -CLAMP, CLAMP);
   const pitch = clamp(raw.pitch - slot.calib.pitch, -CLAMP, CLAMP);
@@ -131,9 +188,155 @@ function emitPose() {
   });
 }
 
+/** 実写ではなく正規化座標の点群だけ送る（設定画面のシルエット用） */
+function extractPreviewPoints(lm) {
+  if (!lm) return null;
+  const pts = [];
+  for (const i of PREVIEW_LANDMARK_IDX) {
+    const p = lm[i];
+    if (!p) continue;
+    pts.push([
+      Math.round(p.x * 1000) / 1000,
+      Math.round(p.y * 1000) / 1000,
+    ]);
+  }
+  return pts.length ? pts : null;
+}
+
+/**
+ * 4x4 column-major → yaw/pitch/roll（ラジアン）。失敗時は null。
+ * MediaPipe facialTransformationMatrixes 用。
+ */
+function extractEulerFromMatrix(matrix) {
+  const m = matrix?.data || matrix;
+  if (!m || m.length < 16) return null;
+  // R column-major: r_ij = m[i + j*4]
+  const r00 = m[0];
+  const r10 = m[1];
+  const r20 = m[2];
+  const r01 = m[4];
+  const r11 = m[5];
+  const r21 = m[6];
+  const r02 = m[8];
+  const r12 = m[9];
+  const r22 = m[10];
+  // XYZ オイラー
+  const pitch = Math.asin(clamp(-r12, -1, 1));
+  let yaw;
+  let roll;
+  if (Math.abs(r12) < 0.9999) {
+    yaw = Math.atan2(r02, r22);
+    roll = Math.atan2(r10, r11);
+  } else {
+    // ジンバルロック近傍
+    yaw = Math.atan2(-r20, r00);
+    roll = 0;
+  }
+  if (![yaw, pitch, roll].every(Number.isFinite)) {
+    const sy = Math.sqrt(r00 * r00 + r10 * r10) || 1e-6;
+    return {
+      yaw: Math.round(Math.atan2(-r20, sy) * 1000) / 1000,
+      pitch: Math.round(Math.atan2(r21, r22) * 1000) / 1000,
+      roll: Math.round(Math.atan2(r01, r00) * 1000) / 1000,
+    };
+  }
+  return {
+    yaw: Math.round(yaw * 1000) / 1000,
+    pitch: Math.round(pitch * 1000) / 1000,
+    roll: Math.round(roll * 1000) / 1000,
+  };
+}
+
+/** プレビュー用に必要なブレンドシェイプだけ抜粋 */
+const BLEND_KEYS = [
+  'eyeBlinkLeft',
+  'eyeBlinkRight',
+  'jawOpen',
+  'mouthSmileLeft',
+  'mouthSmileRight',
+  'browInnerUp',
+  'browDownLeft',
+  'browDownRight',
+];
+
+function extractBlendSummary(blendshapes) {
+  const cats = blendshapes?.categories;
+  if (!Array.isArray(cats) || !cats.length) return null;
+  const map = Object.create(null);
+  for (const c of cats) {
+    const name = c?.categoryName || c?.displayName;
+    if (!name) continue;
+    map[name] = Number(c.score) || 0;
+  }
+  const out = {};
+  let any = false;
+  for (const k of BLEND_KEYS) {
+    if (map[k] != null) {
+      out[k] = Math.round(map[k] * 1000) / 1000;
+      any = true;
+    }
+  }
+  return any ? out : null;
+}
+
+function buildSlotPreview(slot, faceEntry) {
+  const base = {
+    tracking: !!slot.tracking,
+    yaw: slot.yaw,
+    pitch: slot.pitch,
+    points: extractPreviewPoints(faceEntry?.lm) || null,
+    euler: null,
+    blend: null,
+  };
+  if (!faceEntry) return base;
+  base.euler = extractEulerFromMatrix(faceEntry.matrix) || null;
+  base.blend = extractBlendSummary(faceEntry.blend) || null;
+  return base;
+}
+
+function emitPreview(ranked, leftFace, rightFace) {
+  const now = performance.now();
+  if (now - lastPreviewSentAt < PREVIEW_EVERY_MS) return;
+  lastPreviewSentAt = now;
+  const mode = runtimeOpts.displayMode;
+  const p1 = faceSlots.p1;
+  const p2 = faceSlots.p2;
+  let p1Prev;
+  let p2Prev;
+  if (mode === 'p1') {
+    p1Prev = buildSlotPreview(p1, ranked[0] || null);
+    p2Prev = buildSlotPreview(p2, null);
+  } else if (mode === 'p2') {
+    p1Prev = buildSlotPreview(p1, null);
+    p2Prev = buildSlotPreview(p2, ranked[0] || null);
+  } else {
+    p1Prev = buildSlotPreview(p1, leftFace);
+    p2Prev = buildSlotPreview(p2, rightFace);
+  }
+  window.avatarFaceAPI?.sendPreview?.({
+    tracking: p1.tracking || p2.tracking,
+    calibrating: !!(
+      (p1.tracking && !p1.calib && (p1.calibSamples?.length || 0) > 0) ||
+      (p2.tracking && !p2.calib && (p2.calibSamples?.length || 0) > 0)
+    ),
+    p1: p1Prev,
+    p2: p2Prev,
+  });
+}
+
+function recalibrateSlots() {
+  for (const id of ['p1', 'p2']) {
+    const slot = faceSlots[id];
+    slot.calib = null;
+    slot.calibSamples = [];
+    slot.lost = 0;
+    // 現在値はそのまま。次の検出で正面サンプルを取り直す
+  }
+}
+
 async function ensureLandmarker(config) {
   const numFaces = runtimeOpts.numFaces;
-  const key = `${config.visionModuleUrl}|${config.wasmRoot}|${config.modelAssetPath}|n${numFaces}`;
+  const key = `${config.visionModuleUrl}|${config.wasmRoot}|${config.modelAssetPath}|n${numFaces}|mx+bs`;
   if (landmarker && landmarkerKey === key) return landmarker;
   if (landmarker) {
     try { landmarker.close(); } catch (_) { /* */ }
@@ -151,6 +354,9 @@ async function ensureLandmarker(config) {
     },
     runningMode: 'VIDEO',
     numFaces,
+    // 設定プレビュー用（実写は送らない）: 頭の姿勢行列 + 表情係数
+    outputFacialTransformationMatrixes: true,
+    outputFaceBlendshapes: true,
   };
   try {
     landmarker = await FaceLandmarker.createFromOptions(vision, options);
@@ -209,9 +415,20 @@ function tick() {
   if (!running || !landmarker || !video) return;
   rafId = requestAnimationFrame(tick);
 
-  if (video.readyState < 2) return;
+  // カメラ切断・未準備でもロスト扱いにして正面へ戻す
+  if (video.readyState < 2 || (stream && stream.getTracks().every((t) => t.readyState !== 'live'))) {
+    updateSlot(faceSlots.p1, null);
+    updateSlot(faceSlots.p2, null);
+    emitPose();
+    emitPreview([], null, null);
+    return;
+  }
   const now = performance.now();
-  if (video.currentTime === lastVideoTime) return;
+  if (video.currentTime === lastVideoTime) {
+    // フレームが進まない間もロストカウントを進めたい場合はここでも null 更新できるが、
+    // 一時停止っぽいスタッターでは誤ロストしやすいのでスキップ
+    return;
+  }
   lastVideoTime = video.currentTime;
 
   let result;
@@ -219,16 +436,30 @@ function tick() {
     result = landmarker.detectForVideo(video, now);
   } catch (err) {
     window.avatarFaceAPI?.sendError?.(String(err?.message || err));
+    updateSlot(faceSlots.p1, null);
+    updateSlot(faceSlots.p2, null);
+    emitPose();
+    emitPreview([], null, null);
     return;
   }
 
   const faces = result?.faceLandmarks || [];
+  const matrices = result?.facialTransformationMatrixes || [];
+  const blends = result?.faceBlendshapes || [];
   const ranked = faces
-    .map((lm) => ({ lm, x: noseX(lm), raw: computeRawPose(lm) }))
+    .map((lm, i) => ({
+      lm,
+      x: noseX(lm),
+      raw: computeRawPose(lm),
+      matrix: matrices[i] || null,
+      blend: blends[i] || null,
+    }))
     .filter((f) => f.raw)
     .sort((a, b) => a.x - b.x);
 
   const mode = runtimeOpts.displayMode;
+  let leftFace = null;
+  let rightFace = null;
   if (mode === 'p1' || mode === 'p2') {
     // 1顔モード: 検出顔を表示スロットへ。他方はロスト扱い
     const only = ranked[0]?.raw || null;
@@ -248,10 +479,13 @@ function tick() {
       left = right;
       right = tmp;
     }
+    leftFace = left;
+    rightFace = right;
     updateSlot(faceSlots.p1, left?.raw || null);
     updateSlot(faceSlots.p2, right?.raw || null);
   }
   emitPose();
+  emitPreview(ranked, leftFace, rightFace);
 }
 
 async function applyConfig(config) {
@@ -291,6 +525,9 @@ function boot() {
     applyConfig(config).catch((err) => {
       window.avatarFaceAPI.sendError(String(err?.message || err));
     });
+  });
+  window.avatarFaceAPI.onRecalibrate?.(() => {
+    recalibrateSlots();
   });
 }
 
