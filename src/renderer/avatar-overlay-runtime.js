@@ -358,9 +358,13 @@ function applyCustomLayerTransforms(s, t, faceS, h1, h2) {
       baseY += s.rigY;
       baseRot += s.rigRot;
     }
+    // 自前 sine（髪を降格したカスタム部位が DOM でも揺れるように）。
+    // spring / lookMul / audioBounce は Pixi 専用。
+    const own = sineOffset(cl, t);
     const sc = (cl.scale || 1) * (parent.scale || 1);
     const x = baseX + (cl.offsetX || 0);
-    const y = baseY + (cl.offsetY || 0);
+    const y = baseY + (cl.offsetY || 0) + own.y;
+    baseRot += own.rot;
     item.img.style.transform = `translate(${x}px, ${y}px) scale(${sc}) rotate(${baseRot}rad)`;
   }
 }

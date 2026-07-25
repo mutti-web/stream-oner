@@ -33,6 +33,7 @@ const serveAvatarOverlayStatic = createRendererStaticHandler(RENDERER_DIR, {
   '/avatar-face-capture.js': 'avatar-face-capture.js',
   '/vendor/pixi.min.js': 'vendor/pixi.min.js',
   '/shared/avatar-constants.js': 'shared/avatar-constants.js',
+  '/shared/avatar-face-mesh.js': 'shared/avatar-face-mesh.js',
 });
 
 const MEDIAPIPE_DIR = path.join(RENDERER_DIR, 'vendor/mediapipe');
@@ -178,6 +179,27 @@ class AvatarManager extends EventEmitter {
     slotCfg.migrateSlotAudioFromGlobal(
       this._store, K.p1Slot, K.p2Slot, K.speakThreshold, K.sensitivity,
     );
+    // 1.14: マスク既定ONは目・口を消すことがある → オプトインへ一度リセット
+    if (!this._store.get('avatar.migratedFaceMaskOptIn', false)) {
+      for (const key of [K.p1Slot, K.p2Slot]) {
+        const raw = this._store.get(key, null);
+        if (raw && typeof raw === 'object' && raw.faceMaskEnabled) {
+          raw.faceMaskEnabled = false;
+          this._store.set(key, raw);
+        }
+      }
+      this._store.set('avatar.migratedFaceMaskOptIn', true);
+    }
+    // 1.15: 髪・鼻はメイン部位からカスタム部位へ降格（見え方は数値で引き継ぐ）
+    if (!this._store.get('avatar.migratedHairNoseToCustom', false)) {
+      for (const key of [K.p1Slot, K.p2Slot]) {
+        const raw = this._store.get(key, null);
+        if (!raw || typeof raw !== 'object') continue;
+        const { slot, changed } = slotCfg.demoteHairNoseToCustom(raw);
+        if (changed) this._store.set(key, slot);
+      }
+      this._store.set('avatar.migratedHairNoseToCustom', true);
+    }
     this._migrated = true;
   }
 

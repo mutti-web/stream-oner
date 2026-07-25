@@ -46,12 +46,79 @@ const MULTIPLIERS_INTEGRATED = {
   composite: 0.8,
 };
 
-const YAW_PX = 2.2;
-const PITCH_PX = 1.8;
+/** face capture / HUD は概ね ±1。スロット設定 poseYawPx / posePitchPx で上書き */
+const DEFAULT_YAW_PX = 42;
+const DEFAULT_PITCH_PX = 34;
 const SLOT_TARGET_H = 280;
 const HAIR_SPRING_DT = 1 / 60;
+/** カスタム部位の追従量の既定（lookMul 未設定時） */
+const CUSTOM_LOOK_MUL = 0.7;
 /** WebGL MAX_TEXTURE_SIZE が 4096 の端末でも載るよう、長い辺を制限 */
 const MAX_TEX_EDGE = 2048;
+
+const FaceMesh = typeof window !== 'undefined' ? window.AvatarFaceMesh : null;
+
+function meshOptsFromCfg(cfg, pxScale) {
+  if (!FaceMesh) return null;
+  return FaceMesh.resolveMeshOpts({
+    faceMeshDivisions: cfg?.faceMeshDivisions,
+    meshYawStrength: cfg?.meshYawStrength,
+    meshPitchStrength: cfg?.meshPitchStrength,
+    poseParallaxWhenMesh: cfg?.poseParallaxWhenMesh,
+    pxScale: pxScale ?? 1,
+  });
+}
+
+/** Sprite と同じ見た目になるよう、テクスチャ中心 pivot の MeshPlane を作る */
+function createFaceMeshPlane(texture, zIndex, divisions, pixiUrl) {
+  if (!texture || !PIXI.MeshPlane) return null;
+  const cells = Math.max(4, Math.min(16, Math.round(Number(divisions) || 8)));
+  const mesh = new PIXI.MeshPlane({
+    texture,
+    verticesX: cells + 1,
+    verticesY: cells + 1,
+  });
+  // 毎フレーム頂点を書くので、テクスチャ差し替えでの自動 rebuild は切る
+  mesh.autoResize = false;
+  const w = texture.width || 1;
+  const h = texture.height || 1;
+  mesh.pivot.set(w / 2, h / 2);
+  mesh.zIndex = zIndex;
+  mesh._pixiUrl = pixiUrl || null;
+  // Sprite.anchor(0.5) 相当。placeSprite / fitSprite が scale を扱う
+  fitSprite(mesh, SLOT_TARGET_H);
+  return mesh;
+}
+
+function captureMeshRest(mesh) {
+  const attr = mesh?.geometry?.getAttribute?.('aPosition');
+  if (!attr?.buffer?.data) return null;
+  const data = attr.buffer.data;
+  return {
+    rest: new Float32Array(data),
+    width: mesh.geometry.width || mesh.texture?.width || 1,
+    height: mesh.geometry.height || mesh.texture?.height || 1,
+    attr,
+  };
+}
+
+function syncMeshDeform(meshState, yaw, pitch, opts) {
+  if (!meshState || !FaceMesh) return;
+  const data = meshState.attr.buffer.data;
+  if (data.length !== meshState.rest.length) {
+    meshState.rest = new Float32Array(data);
+  }
+  FaceMesh.applyMeshPlaneDeform(
+    data,
+    meshState.rest,
+    meshState.width,
+    meshState.height,
+    yaw,
+    pitch,
+    opts,
+  );
+  meshState.attr.buffer.update();
+}
 
 const hud = document.getElementById('hud');
 const yawInput = document.getElementById('yaw');
@@ -109,7 +176,32 @@ function updateFaceStatusUi() {
 function lerp(a, b, t) { return a + (b - a) * t; }
 
 function multipliersFor(cfg) {
-  return cfg?.rigType === 'integrated' ? MULTIPLIERS_INTEGRATED : MULTIPLIERS_HUMAN;
+  const base = cfg?.rigType === 'integrated' ? MULTIPLIERS_INTEGRATED : MULTIPLIERS_HUMAN;
+  const out = { ...base };
+  const layers = cfg?.layers || {};
+  for (const name of Object.keys(base)) {
+    if (name === 'composite') continue;
+    const raw = layers[name]?.lookMul;
+    if (raw === '' || raw == null) continue;
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) out[name] = n;
+  }
+  return out;
+}
+
+function posePxFor(cfg) {
+  const yaw = Number(cfg?.poseYawPx);
+  const pitch = Number(cfg?.posePitchPx);
+  return {
+    yawPx: Number.isFinite(yaw) ? Math.max(0, Math.min(120, yaw)) : DEFAULT_YAW_PX,
+    pitchPx: Number.isFinite(pitch) ? Math.max(0, Math.min(120, pitch)) : DEFAULT_PITCH_PX,
+  };
+}
+
+function clamp01(n, fallback = 0.55) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.max(0, Math.min(1, v));
 }
 
 function layerXY(cfg, name) {
@@ -205,8 +297,8 @@ function makeSpring() {
   return { x: 0, y: 0, vx: 0, vy: 0 };
 }
 
-function stepSpring(spring, targetX, targetY, strength, dt) {
-  const s = Math.max(0, Math.min(1, strength));
+function stepSpring(spring, targetX, targetY, strength, dt, speed = 0.55, dampAmt = 0.55) {
+  const s = clamp01(strength, 0);
   if (s < 0.01) {
     spring.x = targetX;
     spring.y = targetY;
@@ -214,8 +306,11 @@ function stepSpring(spring, targetX, targetY, strength, dt) {
     spring.vy = 0;
     return;
   }
-  const k = 14 + 22 * s;
-  const damp = 6 + 10 * (1 - s * 0.55);
+  const sp = clamp01(speed);
+  const d = clamp01(dampAmt);
+  // 速さ↑でばね定数↑、減衰↑で早く収束
+  const k = 6 + 36 * sp * (0.35 + 0.65 * s);
+  const damp = 3 + 16 * d;
   const ax = (targetX - spring.x) * k - spring.vx * damp;
   const ay = (targetY - spring.y) * k - spring.vy * damp;
   spring.vx += ax * dt;
@@ -375,6 +470,8 @@ function createEmptySlot(id) {
     attachGroup: null,
     maskSprite: null,
     maskSourceName: null,
+    faceMesh: null,
+    maskMesh: null,
     useLayers: false,
     speaking: false,
     laughing: false,
@@ -441,7 +538,8 @@ async function rebuildSlot(id, data) {
     const faceUrl = a.face || a.body || null;
     const mouthUrl = a['mouth-closed'] || a['mouth-open'] || null;
     // レイヤーが1枚も無いときだけプレースホルダ（口だけのオレンジ箱を出さない）
-    const needFacePh = !faceUrl && !bodyUrl && !a.hair1 && !a['eyes-normal'];
+    const hasCustom = Object.keys(a).some((k) => k.startsWith('custom-') && a[k]);
+    const needFacePh = !faceUrl && !bodyUrl && !a.hair1 && !a['eyes-normal'] && !hasCustom;
 
     s.sprites.body = await buildLayerSprite(bodyUrl, layerZ(cfg, 'body'), null, 0x3d5a80);
     s.sprites.face = await buildLayerSprite(
@@ -450,6 +548,30 @@ async function rebuildSlot(id, data) {
       needFacePh ? 'face' : null,
       0x98c1d9,
     );
+    // 顔 Mesh: 実テクスチャの Sprite を MeshPlane に載せ替え（プレースホルダ Container は対象外）
+    if (
+      cfg.faceMeshEnabled === true &&
+      FaceMesh &&
+      PIXI.MeshPlane &&
+      s.sprites.face?.texture &&
+      s.sprites.face.anchor
+    ) {
+      const z = layerZ(cfg, 'face');
+      const url = s.sprites.face._pixiUrl;
+      const mesh = createFaceMeshPlane(
+        s.sprites.face.texture,
+        z,
+        cfg.faceMeshDivisions,
+        url,
+      );
+      if (mesh) {
+        const lo = layerXY(cfg, 'face');
+        if (lo.scaleMul !== 1) fitSprite(mesh, SLOT_TARGET_H, lo.scaleMul);
+        s.sprites.face.destroy();
+        s.sprites.face = mesh;
+        s.faceMesh = captureMeshRest(mesh);
+      }
+    }
     s.sprites.hair1 = await buildLayerSprite(a.hair1, layerZ(cfg, 'hair1'), null, 0x293241);
     s.sprites.hair2 = await buildLayerSprite(a.hair2, layerZ(cfg, 'hair2'), null, 0x1b263b);
     s.sprites.eyes = await buildLayerSprite(
@@ -480,7 +602,8 @@ async function rebuildSlot(id, data) {
     s.root.addChild(s.attachGroup);
 
     const maskSource = s.sprites.face || s.sprites.body || null;
-    const useMask = cfg.faceMaskEnabled !== false && maskSource;
+    // オプトイン（既定OFF）。face が輪郭のみ等だと目・口を全消しするため。
+    const useMask = cfg.faceMaskEnabled === true && maskSource;
 
     for (const [name, sp] of Object.entries(s.sprites)) {
       if (!sp) continue;
@@ -493,14 +616,31 @@ async function rebuildSlot(id, data) {
         s.root.addChild(sp);
       }
     }
-    if (useMask) {
-      // 表示用 Sprite 自体を mask にすると Pixi が通常描画から除外するため、
-      // 同じ Texture を持つマスク専用 Sprite を別に用意する。
+    if (useMask && maskSource.texture) {
+      // 表示用 Sprite を mask にすると通常描画から外れるため、マスク専用表示物を使う。
+      // renderable=false にしないとマスクが上に乗って目・口・動きが見えなくなる。
       s.maskSourceName = s.sprites.face ? 'face' : 'body';
-      s.maskSprite = new PIXI.Sprite(maskSource.texture);
-      s.maskSprite.anchor.set(0.5);
-      s.root.addChild(s.maskSprite);
-      s.attachGroup.mask = s.maskSprite;
+      if (s.faceMesh && s.maskSourceName === 'face' && PIXI.MeshPlane) {
+        s.maskSprite = createFaceMeshPlane(
+          maskSource.texture,
+          0,
+          cfg.faceMeshDivisions,
+          null,
+        );
+        if (s.maskSprite) {
+          s.maskSprite.renderable = false;
+          s.maskMesh = captureMeshRest(s.maskSprite);
+          s.root.addChild(s.maskSprite);
+          s.attachGroup.mask = s.maskSprite;
+        }
+      } else {
+        s.maskSprite = new PIXI.Sprite(maskSource.texture);
+        s.maskSprite.anchor.set(0.5);
+        fitSprite(s.maskSprite, SLOT_TARGET_H);
+        s.maskSprite.renderable = false;
+        s.root.addChild(s.maskSprite);
+        s.attachGroup.mask = s.maskSprite;
+      }
     }
   } else {
     const url = pickCompositeUrl(s) || a.face || a.body;
@@ -520,7 +660,7 @@ async function rebuildSlot(id, data) {
     if (Number.isFinite(sc) && sc > 0 && sp.scale) {
       fitSprite(sp, SLOT_TARGET_H, sc);
     }
-    s.customItems.push({ cfg: cl, sp, assetKey });
+    s.customItems.push({ cfg: cl, sp, assetKey, spring: makeSpring(), springReady: false });
     if (s.attachGroup && isAttachChildAnchor(cl.parentAnchor)) {
       s.attachGroup.addChild(sp);
     } else {
@@ -574,10 +714,11 @@ async function applyInit(msg) {
   const n1 = Object.keys(slots.p1?.assets || {}).filter((k) => slots.p1.assets[k]).length;
   const n2 = Object.keys(slots.p2?.assets || {}).filter((k) => slots.p2.assets[k]).length;
   const faceHint = faceTrackEnabled ? ' face:on' : '';
-  const loaded = ['face', 'hair1', 'eyes', 'mouth', 'body']
-    .filter((k) => slots.p1?.sprites?.[k]?.texture || (k === 'eyes' && slots.p1?.sprites?.eyes?.texture))
+  const loaded = ['face', 'eyes', 'mouth', 'body']
+    .filter((k) => slots.p1?.sprites?.[k]?.texture)
     .join(',') || 'none';
-  setStatus(`WS ok / p1 assets:${n1} sprites:${loaded} mode:${displayMode}${faceHint}`);
+  const customs = (slots.p1?.customItems || []).length;
+  setStatus(`WS ok / p1 assets:${n1} sprites:${loaded} customs:${customs} mode:${displayMode}${faceHint}`);
   updateFaceStatusUi();
 }
 
@@ -732,11 +873,21 @@ function applySlotVisuals(s, tNow) {
     s.nextBlinkAt = tNow + naturalBlinkDelayMs(s.cfg);
   }
 
-  const ox = (slotPose[s.id] || slotPose.p1).yaw * YAW_PX;
-  const oy = (slotPose[s.id] || slotPose.p1).pitch * PITCH_PX;
+  const { yawPx, pitchPx } = posePxFor(s.cfg);
+  const poseNow = slotPose[s.id] || slotPose.p1;
+  const ox = poseNow.yaw * yawPx;
+  const oy = poseNow.pitch * pitchPx;
   const Sp = s.sprites;
   const mult = multipliersFor(s.cfg);
   const layers = s.cfg?.layers || {};
+  const meshOn = !!(s.faceMesh && FaceMesh && s.cfg?.faceMeshEnabled);
+  // テクスチャ空間へ書くとき: display_px / scale = tex_px。scale ≈ SLOT_TARGET_H / texH
+  const faceScale = Math.abs(Sp.face?.scale?.y) || (s.faceMesh ? SLOT_TARGET_H / s.faceMesh.height : 1);
+  const meshOptsTex = meshOn ? meshOptsFromCfg(s.cfg, 1 / faceScale) : null;
+  const meshOptsDisp = meshOn ? meshOptsFromCfg(s.cfg, 1) : null;
+  const para = meshOn ? (meshOptsDisp?.poseParallaxWhenMesh ?? 0.35) : 1;
+  const oxFace = ox * para;
+  const oyFace = oy * para;
 
   if (s.useLayers) {
     const mouthUrl = pickMouthUrl(s);
@@ -768,11 +919,12 @@ function applySlotVisuals(s, tNow) {
     updateLookAt(s, tNow);
 
     const jiggle = getJiggleScale(s);
-    const hairStrRaw = Number(s.cfg?.hairSpringStrength);
-    const hairStr = Number.isFinite(hairStrRaw) ? Math.max(0, Math.min(1, hairStrRaw)) : 0.55;
+    const hairStr = clamp01(s.cfg?.hairSpringStrength);
+    const hairSpeed = clamp01(s.cfg?.hairSpringSpeed);
+    const hairDamp = clamp01(s.cfg?.hairSpringDamp);
     const audioBounce = ((s.smoothLevel ?? s.level ?? 0) / 100) * (2.2 + hairStr * 3.5);
 
-    const placeRigChild = (sp, name, extraY, extraRot) => {
+    const placeRigChild = (sp, name, extraY, extraRot, oxUse = ox, oyUse = oy) => {
       if (!sp) return;
       const lo = layerXY(s.cfg, name);
       const m = mult[name] ?? 1;
@@ -781,8 +933,8 @@ function applySlotVisuals(s, tNow) {
       const base = Math.abs(sp.scale.x) || bx;
       placeSprite(
         sp,
-        s.rigX + lo.x + ox * m,
-        s.rigY + lo.y + (extraY || 0) + oy * m,
+        s.rigX + lo.x + oxUse * m,
+        s.rigY + lo.y + (extraY || 0) + oyUse * m,
         s.rigRot + (extraRot || 0),
         base,
         base,
@@ -795,23 +947,43 @@ function applySlotVisuals(s, tNow) {
       const m = mult[name] ?? 1;
       fitSprite(sp, SLOT_TARGET_H, lo.scaleMul);
       const base = Math.abs(sp.scale.x) || lo.scaleMul;
+      let mx = 0;
+      let my = 0;
+      let sxMul = 1;
+      if (meshOn && meshOptsDisp) {
+        const follow = FaceMesh.attachFollowFromPose(
+          lo.x,
+          lo.y + (extraY || 0),
+          poseNow.yaw,
+          poseNow.pitch,
+          SLOT_TARGET_H * 0.5,
+          meshOptsDisp,
+        );
+        mx = follow.dx;
+        my = follow.dy;
+        sxMul = follow.scaleX;
+      }
       placeSprite(
         sp,
-        s.attachX + lo.x + ox * m,
-        s.attachY + lo.y + (extraY || 0) + oy * m,
+        s.attachX + lo.x + oxFace * m + mx,
+        s.attachY + lo.y + (extraY || 0) + oyFace * m + my,
         s.attachRot + (extraRot || 0),
-        base,
+        base * sxMul,
         base * (scaleYMul || 1),
       );
     };
 
     placeRigChild(Sp.body, 'body', 0, 0);
-    placeRigChild(Sp.face, 'face', faceS.y, faceS.rot);
+    placeRigChild(Sp.face, 'face', faceS.y, faceS.rot, oxFace, oyFace);
+    if (meshOn && meshOptsTex) {
+      syncMeshDeform(s.faceMesh, poseNow.yaw, poseNow.pitch, meshOptsTex);
+      if (s.maskMesh) syncMeshDeform(s.maskMesh, poseNow.yaw, poseNow.pitch, meshOptsTex);
+    }
     if (s.maskSprite && s.maskSourceName) {
       const source = Sp[s.maskSourceName];
       if (source) {
-        s.maskSprite.position.copyFrom(source.position);
-        s.maskSprite.scale.copyFrom(source.scale);
+        s.maskSprite.position.set(source.position.x, source.position.y);
+        s.maskSprite.scale.set(source.scale.x, source.scale.y);
         s.maskSprite.rotation = source.rotation;
       }
     }
@@ -824,8 +996,8 @@ function applySlotVisuals(s, tNow) {
     const t1y = s.rigY + h1.y + h1S.y + oy * h1m + audioBounce * 0.55;
     const t2x = s.rigX + h2.x + ox * h2m;
     const t2y = s.rigY + h2.y + h2S.y + oy * h2m + audioBounce;
-    stepSpring(s.hair1Spring, t1x, t1y, hairStr, HAIR_SPRING_DT);
-    stepSpring(s.hair2Spring, t2x, t2y, hairStr * 0.85, HAIR_SPRING_DT);
+    stepSpring(s.hair1Spring, t1x, t1y, hairStr, HAIR_SPRING_DT, hairSpeed, hairDamp);
+    stepSpring(s.hair2Spring, t2x, t2y, hairStr * 0.85, HAIR_SPRING_DT, hairSpeed, hairDamp);
     if (Sp.hair1) {
       fitSprite(Sp.hair1, SLOT_TARGET_H, h1.scaleMul);
       const base = Math.abs(Sp.hair1.scale.x) || 1;
@@ -846,12 +1018,28 @@ function applySlotVisuals(s, tNow) {
       const m = mult.eyes ?? 1;
       fitSprite(Sp.pupil, SLOT_TARGET_H, lo.scaleMul);
       const base = Math.abs(Sp.pupil.scale.x) || lo.scaleMul;
+      let mx = 0;
+      let my = 0;
+      let sxMul = 1;
+      if (meshOn && meshOptsDisp) {
+        const follow = FaceMesh.attachFollowFromPose(
+          lo.x + (s.pupilX || 0),
+          lo.y + (s.pupilY || 0),
+          poseNow.yaw,
+          poseNow.pitch,
+          SLOT_TARGET_H * 0.5,
+          meshOptsDisp,
+        );
+        mx = follow.dx;
+        my = follow.dy;
+        sxMul = follow.scaleX;
+      }
       placeSprite(
         Sp.pupil,
-        s.attachX + lo.x + (s.pupilX || 0) + ox * m,
-        s.attachY + lo.y + (s.pupilY || 0) + oy * m,
+        s.attachX + lo.x + (s.pupilX || 0) + oxFace * m + mx,
+        s.attachY + lo.y + (s.pupilY || 0) + oyFace * m + my,
         s.attachRot,
-        base,
+        base * sxMul,
         base,
       );
     }
@@ -874,14 +1062,58 @@ function applySlotVisuals(s, tNow) {
       const sc = (Number(cl.scale) > 0 ? Number(cl.scale) : 1) * (parent.scale || 1);
       fitSprite(item.sp, SLOT_TARGET_H, sc);
       const base = Math.abs(item.sp.scale.x) || sc;
-      placeSprite(
-        item.sp,
-        baseX + (Number(cl.offsetX) || 0) + ox * 0.7,
-        baseY + (Number(cl.offsetY) || 0) + oy * 0.7,
-        baseRot,
-        base,
-        base,
-      );
+
+      const lookRaw = Number(cl.lookMul);
+      const look = Number.isFinite(lookRaw) && lookRaw >= 0 ? lookRaw : CUSTOM_LOOK_MUL;
+      const own = sineOffset(cl, tNow);
+      const bounce = ((s.smoothLevel ?? s.level ?? 0) / 100) * (Number(cl.audioBounce) || 0);
+      const lookOx = (isAttachChildAnchor(cl.parentAnchor) || cl.parentAnchor === 'face') ? oxFace : ox;
+      const lookOy = (isAttachChildAnchor(cl.parentAnchor) || cl.parentAnchor === 'face') ? oyFace : oy;
+      let mx = 0;
+      let my = 0;
+      let sxMul = 1;
+      if (meshOn && meshOptsDisp && isAttachChildAnchor(cl.parentAnchor)) {
+        const follow = FaceMesh.attachFollowFromPose(
+          Number(cl.offsetX) || 0,
+          Number(cl.offsetY) || 0,
+          poseNow.yaw,
+          poseNow.pitch,
+          SLOT_TARGET_H * 0.5,
+          meshOptsDisp,
+        );
+        mx = follow.dx;
+        my = follow.dy;
+        sxMul = follow.scaleX;
+      }
+      const targetX = baseX + (Number(cl.offsetX) || 0) + lookOx * look + mx;
+      const targetY = baseY + (Number(cl.offsetY) || 0) + lookOy * look + own.y + bounce + my;
+      const rot = baseRot + own.rot;
+
+      const springStr = clamp01(cl.springStrength, 0);
+      let px = targetX;
+      let py = targetY;
+      if (springStr >= 0.01) {
+        if (!item.springReady) {
+          item.spring.x = targetX;
+          item.spring.y = targetY;
+          item.springReady = true;
+        }
+        stepSpring(
+          item.spring,
+          targetX,
+          targetY,
+          springStr,
+          HAIR_SPRING_DT,
+          clamp01(cl.springSpeed),
+          clamp01(cl.springDamp),
+        );
+        px = item.spring.x;
+        py = item.spring.y;
+      } else {
+        item.springReady = false;
+      }
+
+      placeSprite(item.sp, px, py, rot, base * sxMul, base);
     }
   } else if (Sp.composite) {
     const url = pickCompositeUrl(s);
@@ -896,8 +1128,12 @@ function applySlotVisuals(s, tNow) {
 
 function onFrame() {
   const t = performance.now();
-  applySlotVisuals(slots.p1, t);
-  applySlotVisuals(slots.p2, t);
+  try {
+    applySlotVisuals(slots.p1, t);
+    applySlotVisuals(slots.p2, t);
+  } catch (e) {
+    console.error('[PixiAvatar] frame', e);
+  }
 }
 
 function connectWs() {

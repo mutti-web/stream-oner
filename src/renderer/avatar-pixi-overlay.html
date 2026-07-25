@@ -62,11 +62,12 @@
   <aside id="hud">
     <h1>Pixi overlay（デバッグ）</h1>
     <div class="meta" id="face-status" data-state="off">顔トラッキング: …</div>
-    <label>yaw <input id="yaw" type="range" min="-30" max="30" value="0" step="0.1" /><span id="yaw-val">0</span></label>
-    <label>pitch <input id="pitch" type="range" min="-20" max="20" value="0" step="0.1" /><span id="pitch-val">0</span></label>
+    <label>yaw <input id="yaw" type="range" min="-1" max="1" value="0" step="0.01" /><span id="yaw-val">0</span></label>
+    <label>pitch <input id="pitch" type="range" min="-1" max="1" value="0" step="0.01" /><span id="pitch-val">0</span></label>
     <div class="meta" id="status">WS: connecting…</div>
   </aside>
   <script src="/shared/avatar-constants.js"></script>
+  <script src="/shared/avatar-face-mesh.js"></script>
   <script src="/vendor/pixi.min.js"></script>
   <script src="/avatar-pixi-runtime.js"></script>
 </body>

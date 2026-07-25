@@ -56,6 +56,12 @@ function defaultSine(overrides = {}) {
   return { enabled: false, amp: 6, periodMs: 4000, phase: 0, ...overrides };
 }
 
+function clamp01Num(n, fallback) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.max(0, Math.min(1, v));
+}
+
 function defaultLayer(overrides = {}) {
   return {
     offsetX: 0,
@@ -64,6 +70,8 @@ function defaultLayer(overrides = {}) {
     zIndex: 30,
     sine: defaultSine(),
     drag: false,
+    /** Pixi パララックス倍率。未設定なら rigType プリセットを使う */
+    lookMul: null,
     ...overrides,
   };
 }
@@ -87,6 +95,15 @@ function defaultCustomLayer(overrides = {}) {
     scale: 1,
     zIndex: 45,
     path: '',
+    /** Pixi 顔向きパララックス倍率。null なら既定 0.7 */
+    lookMul: null,
+    /** Pixi 揺れスプリング（0=無効）。髪と同じ挙動を任意部位で使える */
+    springStrength: 0,
+    springSpeed: 0.55,
+    springDamp: 0.55,
+    /** 声の大きさで上下に弾む量（px 相当） */
+    audioBounce: 0,
+    sine: defaultSine(),
     ...overrides,
   };
 }
@@ -96,6 +113,9 @@ function normalizeCustomLayers(layers) {
   return layers.map((raw, i) => {
     const l = raw && typeof raw === 'object' ? raw : {};
     const anchor = CUSTOM_PARENT_ANCHORS.has(l.parentAnchor) ? l.parentAnchor : 'body';
+    const lookRaw = l.lookMul;
+    const lookNum = Number(lookRaw);
+    const sine = l.sine && typeof l.sine === 'object' ? l.sine : {};
     return {
       id: String(l.id || `cl-${i}`),
       name: String(l.name || 'カスタム'),
@@ -105,6 +125,19 @@ function normalizeCustomLayers(layers) {
       scale: Math.max(0.1, Math.min(4, Number(l.scale) || 1)),
       zIndex: Number(l.zIndex) || 45,
       path: String(l.path || '').trim(),
+      lookMul: lookRaw == null || lookRaw === '' || !Number.isFinite(lookNum) || lookNum < 0
+        ? null
+        : lookNum,
+      springStrength: clamp01Num(l.springStrength, 0),
+      springSpeed: clamp01Num(l.springSpeed, 0.55),
+      springDamp: clamp01Num(l.springDamp, 0.55),
+      audioBounce: Math.max(0, Math.min(40, Number(l.audioBounce) || 0)),
+      sine: defaultSine({
+        enabled: !!sine.enabled,
+        amp: Number(sine.amp) || 0,
+        periodMs: Number(sine.periodMs) || 4000,
+        phase: Number(sine.phase) || 0,
+      }),
     };
   }).filter((l) => l.path || l.name);
 }
@@ -152,10 +185,24 @@ function defaultSlot() {
     pupilOffsetMax: 4,
     /** human: 部位パララックス / integrated: 一体感寄り（差を抑える） */
     rigType: 'human',
+    /** Pixi: pose±1 に対するパララックス移動量（px） */
+    poseYawPx: 42,
+    posePitchPx: 34,
     /** 髪スプリングの強さ（0=追従のみ, 1=よく揺れる）。Pixi 経路で使用 */
     hairSpringStrength: 0.55,
-    /** Pixi: 目・口・鼻・瞳を face（なければ body）の不透明領域でマスク */
-    faceMaskEnabled: true,
+    /** 髪スプリングの応答速度（0=遅い, 1=速い） */
+    hairSpringSpeed: 0.55,
+    /** 髪スプリングの減衰（0=余韻長め, 1=すぐ収まる） */
+    hairSpringDamp: 0.55,
+    /** Pixi: 目・口・鼻・瞳を face（なければ body）の不透明領域でマスク（オプトイン） */
+    faceMaskEnabled: false,
+    /** Pixi: 顔テクスチャの格子 Mesh 変形（オプトイン） */
+    faceMeshEnabled: false,
+    faceMeshDivisions: 8,
+    meshYawStrength: 0.55,
+    meshPitchStrength: 0.40,
+    /** Mesh ON 時、face/eyes/mouth の平行移動に掛ける係数 */
+    poseParallaxWhenMesh: 0.35,
     customLayers: [],
     flipX: false,
     flipY: false,
@@ -390,8 +437,17 @@ function slotToOverlay(slotId, slot, baseUrl, existsFn) {
     lookAtEnabled: !!normalized.lookAtEnabled,
     pupilOffsetMax: Math.max(1, Math.min(16, Number(normalized.pupilOffsetMax) || 4)),
     rigType: normalized.rigType === 'integrated' ? 'integrated' : 'human',
+    poseYawPx: Math.max(0, Math.min(120, Number(normalized.poseYawPx) ?? 42)),
+    posePitchPx: Math.max(0, Math.min(120, Number(normalized.posePitchPx) ?? 34)),
     hairSpringStrength: Math.max(0, Math.min(1, Number(normalized.hairSpringStrength) ?? 0.55)),
-    faceMaskEnabled: normalized.faceMaskEnabled !== false,
+    hairSpringSpeed: Math.max(0, Math.min(1, Number(normalized.hairSpringSpeed) ?? 0.55)),
+    hairSpringDamp: Math.max(0, Math.min(1, Number(normalized.hairSpringDamp) ?? 0.55)),
+    faceMaskEnabled: !!normalized.faceMaskEnabled,
+    faceMeshEnabled: !!normalized.faceMeshEnabled,
+    faceMeshDivisions: Math.max(4, Math.min(16, Math.round(Number(normalized.faceMeshDivisions) || 8))),
+    meshYawStrength: Math.max(0, Math.min(2, Number(normalized.meshYawStrength) ?? 0.55)),
+    meshPitchStrength: Math.max(0, Math.min(2, Number(normalized.meshPitchStrength) ?? 0.40)),
+    poseParallaxWhenMesh: Math.max(0, Math.min(1, Number(normalized.poseParallaxWhenMesh) ?? 0.35)),
     customLayers: normalizeCustomLayers(normalized.customLayers),
     layers: normalized.layers,
     /** パスが保存されていてもファイルが無い場合はレイヤーモードにしない */
@@ -437,11 +493,38 @@ function slotFromFormPayload(prefix, data) {
   if (data[`${prefix}_rigType`] !== undefined) {
     slot.rigType = String(data[`${prefix}_rigType`]) === 'integrated' ? 'integrated' : 'human';
   }
+  if (data[`${prefix}_poseYawPx`] !== undefined && data[`${prefix}_poseYawPx`] !== '') {
+    slot.poseYawPx = Math.max(0, Math.min(120, Number(data[`${prefix}_poseYawPx`]) || 0));
+  }
+  if (data[`${prefix}_posePitchPx`] !== undefined && data[`${prefix}_posePitchPx`] !== '') {
+    slot.posePitchPx = Math.max(0, Math.min(120, Number(data[`${prefix}_posePitchPx`]) || 0));
+  }
   if (data[`${prefix}_hairSpringStrength`] !== undefined && data[`${prefix}_hairSpringStrength`] !== '') {
     slot.hairSpringStrength = Math.max(0, Math.min(1, Number(data[`${prefix}_hairSpringStrength`]) || 0));
   }
+  if (data[`${prefix}_hairSpringSpeed`] !== undefined && data[`${prefix}_hairSpringSpeed`] !== '') {
+    slot.hairSpringSpeed = Math.max(0, Math.min(1, Number(data[`${prefix}_hairSpringSpeed`]) || 0));
+  }
+  if (data[`${prefix}_hairSpringDamp`] !== undefined && data[`${prefix}_hairSpringDamp`] !== '') {
+    slot.hairSpringDamp = Math.max(0, Math.min(1, Number(data[`${prefix}_hairSpringDamp`]) || 0));
+  }
   if (data[`${prefix}_faceMaskEnabled`] !== undefined) {
     slot.faceMaskEnabled = !!data[`${prefix}_faceMaskEnabled`];
+  }
+  if (data[`${prefix}_faceMeshEnabled`] !== undefined) {
+    slot.faceMeshEnabled = !!data[`${prefix}_faceMeshEnabled`];
+  }
+  if (data[`${prefix}_faceMeshDivisions`] !== undefined && data[`${prefix}_faceMeshDivisions`] !== '') {
+    slot.faceMeshDivisions = Math.max(4, Math.min(16, Math.round(Number(data[`${prefix}_faceMeshDivisions`]) || 8)));
+  }
+  if (data[`${prefix}_meshYawStrength`] !== undefined && data[`${prefix}_meshYawStrength`] !== '') {
+    slot.meshYawStrength = Math.max(0, Math.min(2, Number(data[`${prefix}_meshYawStrength`]) || 0));
+  }
+  if (data[`${prefix}_meshPitchStrength`] !== undefined && data[`${prefix}_meshPitchStrength`] !== '') {
+    slot.meshPitchStrength = Math.max(0, Math.min(2, Number(data[`${prefix}_meshPitchStrength`]) || 0));
+  }
+  if (data[`${prefix}_poseParallaxWhenMesh`] !== undefined && data[`${prefix}_poseParallaxWhenMesh`] !== '') {
+    slot.poseParallaxWhenMesh = Math.max(0, Math.min(1, Number(data[`${prefix}_poseParallaxWhenMesh`]) || 0));
   }
   if (data[`${prefix}_custom_layers_json`] !== undefined) {
     try {
@@ -474,6 +557,15 @@ function slotFromFormPayload(prefix, data) {
     if (data[`${prefix}_${ln}_sine_amp`] !== undefined) L.sine.amp = Number(data[`${prefix}_${ln}_sine_amp`]) || 0;
     if (data[`${prefix}_${ln}_sine_period`] !== undefined) L.sine.periodMs = Number(data[`${prefix}_${ln}_sine_period`]) || 4000;
     if (data[`${prefix}_${ln}_sine_phase`] !== undefined) L.sine.phase = Number(data[`${prefix}_${ln}_sine_phase`]) || 0;
+    if (data[`${prefix}_${ln}_lookMul`] !== undefined) {
+      const raw = data[`${prefix}_${ln}_lookMul`];
+      if (raw === '' || raw == null) {
+        L.lookMul = null;
+      } else {
+        const n = Number(raw);
+        L.lookMul = Number.isFinite(n) && n >= 0 ? n : null;
+      }
+    }
   }
   return slot;
 }
@@ -523,8 +615,17 @@ function slotToFormFlat(prefix, slot) {
   flat[`${prefix}_lookAtEnabled`] = !!normalized.lookAtEnabled;
   flat[`${prefix}_pupilOffsetMax`] = Number(normalized.pupilOffsetMax) || 4;
   flat[`${prefix}_rigType`] = normalized.rigType === 'integrated' ? 'integrated' : 'human';
+  flat[`${prefix}_poseYawPx`] = Number(normalized.poseYawPx) ?? 42;
+  flat[`${prefix}_posePitchPx`] = Number(normalized.posePitchPx) ?? 34;
   flat[`${prefix}_hairSpringStrength`] = Number(normalized.hairSpringStrength) ?? 0.55;
-  flat[`${prefix}_faceMaskEnabled`] = normalized.faceMaskEnabled !== false;
+  flat[`${prefix}_hairSpringSpeed`] = Number(normalized.hairSpringSpeed) ?? 0.55;
+  flat[`${prefix}_hairSpringDamp`] = Number(normalized.hairSpringDamp) ?? 0.55;
+  flat[`${prefix}_faceMaskEnabled`] = !!normalized.faceMaskEnabled;
+  flat[`${prefix}_faceMeshEnabled`] = !!normalized.faceMeshEnabled;
+  flat[`${prefix}_faceMeshDivisions`] = Number(normalized.faceMeshDivisions) || 8;
+  flat[`${prefix}_meshYawStrength`] = Number(normalized.meshYawStrength) ?? 0.55;
+  flat[`${prefix}_meshPitchStrength`] = Number(normalized.meshPitchStrength) ?? 0.40;
+  flat[`${prefix}_poseParallaxWhenMesh`] = Number(normalized.poseParallaxWhenMesh) ?? 0.35;
   flat[`${prefix}_custom_layers_json`] = JSON.stringify(normalizeCustomLayers(normalized.customLayers));
   for (const key of ASSET_KEYS) {
     const pk = key.replace(/-/g, '_');
@@ -542,11 +643,86 @@ function slotToFormFlat(prefix, slot) {
     flat[`${prefix}_${ln}_sine_amp`] = L.sine.amp;
     flat[`${prefix}_${ln}_sine_period`] = L.sine.periodMs;
     flat[`${prefix}_${ln}_sine_phase`] = L.sine.phase;
+    flat[`${prefix}_${ln}_lookMul`] = L.lookMul == null || L.lookMul === '' ? '' : Number(L.lookMul);
   }
   return flat;
 }
 
+/**
+ * 髪・鼻の「降格」用。Pixi ランタイムの部位別パララックス倍率と同値を持ち、
+ * カスタム部位へ移す際に lookMul として引き継ぐ。
+ */
+const DEMOTE_LOOK_MUL = {
+  human: { hair1: 0.45, hair2: 0.35, nose: 1.0 },
+  integrated: { hair1: 0.75, hair2: 0.7, nose: 0.85 },
+};
+
+/** 降格対象の部位 → カスタム部位の親アンカー / 表示名 */
+const DEMOTE_SPEC = {
+  hair1: { anchor: 'rig', name: '髪（前）' },
+  hair2: { anchor: 'rig', name: '髪（後ろ）' },
+  nose: { anchor: 'nose', name: '鼻' },
+};
+
+/**
+ * hair1 / hair2 / nose を customLayers へ降格する（1スロット分・破壊的でない純関数）。
+ *
+ * - `paths[key]` のみクリアし、`layers[key]` は残す。
+ *   親アンカー hair1/hair2/nose を使う既存カスタム部位の追従を壊さないため。
+ * - 現行の見え方（追従倍率・スプリング・音声バウンス・sine）を数値として引き継ぐ。
+ *
+ * @param {object} slot
+ * @param {string[]} [keys] 対象キー。既定は hair1 → hair2 → 鼻の順
+ * @returns {{ slot: object, changed: boolean, moved: string[] }}
+ */
+function demoteHairNoseToCustom(slot, keys = ['hair1', 'hair2', 'nose']) {
+  if (!slot || typeof slot !== 'object') return { slot, changed: false, moved: [] };
+  const out = { ...slot, paths: { ...(slot.paths || {}) } };
+  const existing = normalizeCustomLayers(out.customLayers);
+  const rig = out.rigType === 'integrated' ? 'integrated' : 'human';
+  const hairStr = clamp01Num(out.hairSpringStrength, 0.55);
+  // Pixi の hair 音声バウンス係数と同式
+  const bounceBase = 2.2 + hairStr * 3.5;
+  const moved = [];
+
+  for (const key of keys) {
+    const spec = DEMOTE_SPEC[key];
+    const path = String(out.paths?.[key] || '').trim();
+    if (!spec || !path) continue;
+    const id = `cl-legacy-${key}`;
+    if (existing.some((l) => l.id === id)) continue;
+    const L = (out.layers && out.layers[key]) || {};
+    const isHair = key === 'hair1' || key === 'hair2';
+    const lookRaw = L.lookMul == null || L.lookMul === '' ? NaN : Number(L.lookMul);
+    existing.push(defaultCustomLayer({
+      id,
+      name: spec.name,
+      parentAnchor: spec.anchor,
+      path,
+      // nose は親アンカー側が layers.nose の offset / scale を持つため二重に掛けない
+      offsetX: isHair ? (Number(L.offsetX) || 0) : 0,
+      offsetY: isHair ? (Number(L.offsetY) || 0) : 0,
+      scale: isHair ? (Number(L.scale) > 0 ? Number(L.scale) : 1) : 1,
+      zIndex: Number(L.zIndex) || DEFAULT_LAYER_Z[key] || 45,
+      lookMul: Number.isFinite(lookRaw) && lookRaw >= 0 ? lookRaw : DEMOTE_LOOK_MUL[rig][key],
+      springStrength: key === 'hair1' ? hairStr : (key === 'hair2' ? hairStr * 0.85 : 0),
+      springSpeed: clamp01Num(out.hairSpringSpeed, 0.55),
+      springDamp: clamp01Num(out.hairSpringDamp, 0.55),
+      audioBounce: key === 'hair1' ? bounceBase * 0.55 : (key === 'hair2' ? bounceBase : 0),
+      // 鼻は親アンカー（face の sine）に乗るので自前 sine は持たせない
+      sine: isHair ? defaultSine({ ...(L.sine || {}) }) : defaultSine({ enabled: false }),
+    }));
+    out.paths[key] = '';
+    moved.push(key);
+  }
+
+  if (!moved.length) return { slot, changed: false, moved };
+  out.customLayers = normalizeCustomLayers(existing);
+  return { slot: out, changed: true, moved };
+}
+
 module.exports = {
+  demoteHairNoseToCustom,
   normalizeSlotOffsets,
   clampSlotOffsetPct,
   SLOT_REF_W,

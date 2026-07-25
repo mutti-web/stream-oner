@@ -46,6 +46,11 @@
     .layer-rig > .layer-img[data-layer="hair2"] {
       filter: drop-shadow(0 4px 12px rgba(0,0,0,.45));
     }
+    /* カスタム部位へ降格した髪も、降格前と同じ影を保つ */
+    .layer-custom[data-custom-id="cl-legacy-hair1"],
+    .layer-custom[data-custom-id="cl-legacy-hair2"] {
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,.45));
+    }
     /* 発話時の口の膨らみは中心拡大（下基準だと口だけ上に跳ねる） */
     .layer-img[data-layer="mouth"] {
       transform-origin: center center;
