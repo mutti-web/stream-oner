@@ -571,6 +571,22 @@ async function buildCustomLayerDisplay(cl, url) {
   };
 }
 
+async function buildLayerSprite(url, z, placeholderLabel, color) {
+  const tex = await ensureTexture(url);
+  if (tex) {
+    const sp = new PIXI.Sprite(tex);
+    sp.anchor.set(0.5);
+    fitSprite(sp, SLOT_TARGET_H);
+    sp.zIndex = z;
+    sp._pixiUrl = url;
+    return sp;
+  }
+  if (!placeholderLabel) return null;
+  const ph = makePlaceholder(color, 120, 80, placeholderLabel);
+  ph.zIndex = z;
+  return ph;
+}
+
 async function rebuildSlot(id, data) {
   if (!app) return;
   const prev = slots[id];
