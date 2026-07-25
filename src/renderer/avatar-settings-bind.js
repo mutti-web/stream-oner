@@ -344,6 +344,23 @@
           periodMs: Number(read('sine_period')) || 4000,
           phase: Number(read('sine_phase')) || 0,
         },
+        sway: {
+          enabled: !!read('sway_on'),
+          pivotX: Number(read('sway_px')) || 0,
+          pivotY: Number(read('sway_py')) || 0,
+          width: Number(read('sway_width')) || 0,
+          maxAngleDeg: Number(read('sway_angle')) || 6,
+          falloff: (() => {
+            const raw = String(read('sway_falloff') ?? '').trim();
+            if (raw === '') return 1;
+            const n = Number(raw);
+            return Number.isFinite(n) ? n : 1;
+          })(),
+          reach: Number(read('sway_reach')) || 140,
+          periodMs: Number(read('sway_period')) || 3200,
+          follow: Number(read('sway_follow')) || 0,
+          audio: Number(read('sway_audio')) || 0,
+        },
       });
     });
     hidden.value = JSON.stringify(layers);
@@ -374,15 +391,15 @@
           '<md-outlined-text-field type="number" label="拡大率" data-custom-k="scale" step="0.05" min="0.1" max="4" value="' + (layer?.scale ?? 1) + '"></md-outlined-text-field>' +
           '<md-outlined-text-field type="number" label="z-index" data-custom-k="z" value="' + (layer?.zIndex ?? 45) + '"></md-outlined-text-field>' +
         '</div>' +
-        '<div class="app-desc">動き（Pixi）— 追従量は空欄で既定 0.7。揺れは 0 で無効</div>' +
+        '<div class="app-desc">動き（Pixi）— 追従量は空欄で既定 0.7。遅れ追従は 0 で無効</div>' +
         '<div class="app-grid-2">' +
           '<md-outlined-text-field type="number" label="追従量" data-custom-k="look" step="0.05" min="0" value="' + (layer?.lookMul ?? '') + '"></md-outlined-text-field>' +
           '<md-outlined-text-field type="number" label="声で弾む量" data-custom-k="bounce" step="0.5" min="0" max="40" value="' + (layer?.audioBounce ?? 0) + '"></md-outlined-text-field>' +
         '</div>' +
         '<div class="app-grid-2">' +
-          '<md-outlined-text-field type="number" label="揺れ強さ" data-custom-k="spring" step="0.05" min="0" max="1" value="' + (layer?.springStrength ?? 0) + '"></md-outlined-text-field>' +
-          '<md-outlined-text-field type="number" label="揺れの速さ" data-custom-k="spring_speed" step="0.05" min="0" max="1" value="' + (layer?.springSpeed ?? 0.55) + '"></md-outlined-text-field>' +
-          '<md-outlined-text-field type="number" label="揺れの減衰" data-custom-k="spring_damp" step="0.05" min="0" max="1" value="' + (layer?.springDamp ?? 0.55) + '"></md-outlined-text-field>' +
+          '<md-outlined-text-field type="number" label="遅れ追従の強さ" data-custom-k="spring" step="0.05" min="0" max="1" value="' + (layer?.springStrength ?? 0) + '"></md-outlined-text-field>' +
+          '<md-outlined-text-field type="number" label="遅れ追従の速さ" data-custom-k="spring_speed" step="0.05" min="0" max="1" value="' + (layer?.springSpeed ?? 0.55) + '"></md-outlined-text-field>' +
+          '<md-outlined-text-field type="number" label="遅れ追従の減衰" data-custom-k="spring_damp" step="0.05" min="0" max="1" value="' + (layer?.springDamp ?? 0.55) + '"></md-outlined-text-field>' +
         '</div>' +
         '<div class="app-grid-2">' +
           '<md-outlined-text-field type="number" label="ゆらぎの大きさ" data-custom-k="sine_amp" step="0.1" min="0" value="' + (layer?.sine?.amp ?? 0) + '"></md-outlined-text-field>' +
@@ -393,6 +410,25 @@
           '<md-switch data-custom-k="sine_on"' + (layer?.sine?.enabled ? ' selected' : '') + ' icons show-only-selected-icon></md-switch>' +
         '</label>' +
         '<input type="hidden" data-custom-k="sine_phase" value="' + (layer?.sine?.phase ?? 0) + '" />' +
+        '<div class="app-desc">毛先しなり（Pixi）— OFF なら従来どおり固定表示。中心はオフセットと同じ座標。hud ありプレビューで黄色い線が付着帯</div>' +
+        '<label class="app-row app-row-compact app-toggle-inline">' +
+          '<span class="app-toggle-name">毛先しなり</span>' +
+          '<md-switch data-custom-k="sway_on"' + (layer?.sway?.enabled ? ' selected' : '') + ' icons show-only-selected-icon></md-switch>' +
+        '</label>' +
+        '<div class="app-stack-sm" data-sway-panel' + (layer?.sway?.enabled ? '' : ' hidden') + '>' +
+          '<div class="app-grid-2">' +
+            '<md-outlined-text-field type="number" label="付着帯 中心X" data-custom-k="sway_px" value="' + (layer?.sway?.pivotX ?? 0) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="付着帯 中心Y" data-custom-k="sway_py" value="' + (layer?.sway?.pivotY ?? -40) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="付着帯の幅" data-custom-k="sway_width" step="1" min="0" value="' + (layer?.sway?.width ?? 0) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="最大振れ角（度）" data-custom-k="sway_angle" step="0.5" min="0" max="25" value="' + (layer?.sway?.maxAngleDeg ?? 6) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="しなり" data-custom-k="sway_falloff" step="0.1" min="0" max="2" value="' + (layer?.sway?.falloff ?? 1) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="しなり到達距離" data-custom-k="sway_reach" step="5" min="8" value="' + (layer?.sway?.reach ?? 140) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="周期（ms）" data-custom-k="sway_period" step="50" min="400" value="' + (layer?.sway?.periodMs ?? 3200) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="頭への追従" data-custom-k="sway_follow" step="0.05" min="0" max="1" value="' + (layer?.sway?.follow ?? 0.5) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="声でしなる量" data-custom-k="sway_audio" step="0.05" min="0" max="2" value="' + (layer?.sway?.audio ?? 0) + '"></md-outlined-text-field>' +
+          '</div>' +
+          '<div class="app-desc">しなり 0=全体が回る / 1=標準 / 2=毛先だけ。幅 0=点支点（リボン）、前髪は幅を広めに</div>' +
+        '</div>' +
         '<md-text-button type="button" data-custom-remove style="--md-text-button-label-text-color: var(--md-sys-color-error);">削除</md-text-button>' +
       '</div>'
     );
@@ -430,6 +466,12 @@
     document.body.addEventListener('change', (e) => {
       const row = e.target.closest('[data-custom-row]');
       if (!row) return;
+      const swaySw = e.target.closest('[data-custom-k="sway_on"]') || (e.target.getAttribute?.('data-custom-k') === 'sway_on' ? e.target : null);
+      if (swaySw || e.target?.getAttribute?.('data-custom-k') === 'sway_on') {
+        const panel = row.querySelector('[data-sway-panel]');
+        const on = !!(e.target.checked ?? e.target.selected);
+        if (panel) panel.hidden = !on;
+      }
       const wrap = row.closest('[data-custom-layers-wrap]');
       if (wrap) syncCustomLayersJson(wrap.getAttribute('data-custom-layers-wrap'));
     });

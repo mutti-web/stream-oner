@@ -57,6 +57,10 @@ const CUSTOM_LOOK_MUL = 0.7;
 const MAX_TEX_EDGE = 2048;
 
 const FaceMesh = typeof window !== 'undefined' ? window.AvatarFaceMesh : null;
+const SwayMesh = typeof window !== 'undefined' ? window.AvatarSwayMesh : null;
+/** 毛先しなり MeshPlane の格子（8 → 9×9 頂点） */
+const SWAY_MESH_DIVISIONS = 8;
+const SWAY_ANGLE_EPS = 1e-4;
 
 function meshOptsFromCfg(cfg, pxScale) {
   if (!FaceMesh) return null;
@@ -497,23 +501,74 @@ function createEmptySlot(id) {
     pupilTargetX: 0,
     pupilTargetY: 0,
     pupilNextMoveAt: 0,
+    lastPoseYaw: 0,
   };
 }
 
-async function buildLayerSprite(url, z, placeholderLabel, color) {
-  const tex = await ensureTexture(url);
-  if (tex) {
-    const sp = new PIXI.Sprite(tex);
-    sp.anchor.set(0.5);
-    fitSprite(sp, SLOT_TARGET_H);
-    sp.zIndex = z;
-    sp._pixiUrl = url;
-    return sp;
+function createSwayBandMarker(opts) {
+  const g = new PIXI.Graphics();
+  redrawSwayBandMarker(g, opts);
+  g.zIndex = 9999;
+  g.eventMode = 'none';
+  return g;
+}
+
+function redrawSwayBandMarker(g, opts) {
+  if (!g?.clear) return;
+  g.clear();
+  const o = opts || {};
+  const half = Math.max(4, (Number(o.pivotWidth) || 0) / 2);
+  // ローカル原点＝付着帯中心（親の position に中心を載せる）
+  g.moveTo(-half, 0);
+  g.lineTo(half, 0);
+  g.stroke({ width: 2, color: 0xfbbf24, alpha: 0.95 });
+  g.circle(0, 0, 3.5);
+  g.fill({ color: 0xfbbf24, alpha: 0.95 });
+}
+
+async function buildCustomLayerDisplay(cl, url) {
+  const z = Number(cl.zIndex) || 45;
+  const wantSway = !!(
+    SwayMesh &&
+    SwayMesh.isSwayEnabled(cl) &&
+    !isAttachChildAnchor(cl.parentAnchor) &&
+    PIXI.MeshPlane
+  );
+  if (wantSway) {
+    const tex = await ensureTexture(url);
+    if (tex) {
+      const mesh = createFaceMeshPlane(tex, z, SWAY_MESH_DIVISIONS, url);
+      if (mesh) {
+        const sc = Number(cl.scale);
+        if (Number.isFinite(sc) && sc > 0) fitSprite(mesh, SLOT_TARGET_H, sc);
+        const swayMesh = captureMeshRest(mesh);
+        const swayOpts = SwayMesh.swayOptsFromCustom(cl);
+        let swayMarker = null;
+        if (SHOW_HUD) {
+          // ルート直下に置き、表示pxで位置合わせ（メッシュのテクスチャ座標と混ざらない）
+          swayMarker = createSwayBandMarker(swayOpts);
+        }
+        return {
+          sp: mesh,
+          swayMesh,
+          swayAngle: SwayMesh.makeAngleSpring(),
+          lastSwayAngle: 0,
+          swayMarker,
+          swayOpts,
+        };
+      }
+    }
   }
-  if (!placeholderLabel) return null;
-  const ph = makePlaceholder(color, 120, 80, placeholderLabel);
-  ph.zIndex = z;
-  return ph;
+  const sp = await buildLayerSprite(url, z, null, 0xadb5bd);
+  if (!sp) return null;
+  return {
+    sp,
+    swayMesh: null,
+    swayAngle: null,
+    lastSwayAngle: 0,
+    swayMarker: null,
+    swayOpts: null,
+  };
 }
 
 async function rebuildSlot(id, data) {
@@ -640,19 +695,32 @@ async function rebuildSlot(id, data) {
     const assetKey = `custom-${cl.id}`;
     const url = a[assetKey];
     if (!url) continue;
-    const sp = await buildLayerSprite(url, Number(cl.zIndex) || 45, null, 0xadb5bd);
-    if (!sp) continue;
+    const built = await buildCustomLayerDisplay(cl, url);
+    if (!built?.sp) continue;
+    const sp = built.sp;
     sp.position.set(Number(cl.offsetX) || 0, Number(cl.offsetY) || 0);
     const sc = Number(cl.scale);
-    if (Number.isFinite(sc) && sc > 0 && sp.scale) {
+    if (Number.isFinite(sc) && sc > 0 && sp.scale && !built.swayMesh) {
       fitSprite(sp, SLOT_TARGET_H, sc);
     }
-    s.customItems.push({ cfg: cl, sp, assetKey, spring: makeSpring(), springReady: false });
+    s.customItems.push({
+      cfg: cl,
+      sp,
+      assetKey,
+      spring: makeSpring(),
+      springReady: false,
+      swayMesh: built.swayMesh,
+      swayAngle: built.swayAngle,
+      lastSwayAngle: built.lastSwayAngle,
+      swayMarker: built.swayMarker,
+      swayOpts: built.swayOpts,
+    });
     if (s.attachGroup && isAttachChildAnchor(cl.parentAnchor)) {
       s.attachGroup.addChild(sp);
     } else {
       s.root.addChild(sp);
     }
+    if (built.swayMarker) s.root.addChild(built.swayMarker);
   }
 
   const fx = cfg.flipX ? -1 : 1;
@@ -1105,8 +1173,51 @@ function applySlotVisuals(s, tNow) {
         item.springReady = false;
       }
 
+      // 毛先しなり（付着帯メッシュ）。位置決めの上に頂点変形を乗せる
+      if (item.swayMesh && SwayMesh && item.swayAngle) {
+        const yawDelta = poseNow.yaw - (s.lastPoseYaw || 0);
+        const swayOpts = SwayMesh.swayOptsFromCustom(cl);
+        const { angle } = SwayMesh.computeSwayAngle({
+          headYawDelta: yawDelta,
+          audioLevel: s.smoothLevel ?? s.level ?? 0,
+          tMs: tNow,
+          spring: item.swayAngle,
+          opts: swayOpts,
+        });
+        if (Math.abs(angle - (item.lastSwayAngle || 0)) >= SWAY_ANGLE_EPS) {
+          item.lastSwayAngle = angle;
+          const dispScale = Math.abs(item.sp.scale?.y) || 1;
+          SwayMesh.applySwayDeform(
+            item.swayMesh.attr.buffer.data,
+            item.swayMesh.rest,
+            item.swayMesh.width,
+            item.swayMesh.height,
+            { x: swayOpts.pivotX, y: swayOpts.pivotY, width: swayOpts.pivotWidth },
+            angle,
+            swayOpts,
+            dispScale,
+          );
+          item.swayMesh.attr.buffer.update();
+        }
+      }
+
       placeSprite(item.sp, px, py, rot, base * sxMul, base);
+
+      if (item.swayMarker) {
+        const so = item.swayOpts || (SwayMesh ? SwayMesh.swayOptsFromCustom(cl) : null);
+        item.swayMarker.visible = SHOW_HUD;
+        if (so && SHOW_HUD) {
+          if (item._swayMarkerW !== so.pivotWidth) {
+            redrawSwayBandMarker(item.swayMarker, so);
+            item._swayMarkerW = so.pivotWidth;
+          }
+          item.swayMarker.position.set(px + (so.pivotX || 0), py + (so.pivotY || 0));
+          item.swayMarker.rotation = rot;
+        }
+      }
     }
+
+    s.lastPoseYaw = poseNow.yaw;
   } else if (Sp.composite) {
     const url = pickCompositeUrl(s);
     if (url) setSpriteUrl(Sp.composite, url);

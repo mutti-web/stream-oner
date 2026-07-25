@@ -116,6 +116,7 @@ function normalizeCustomLayers(layers) {
     const lookRaw = l.lookMul;
     const lookNum = Number(lookRaw);
     const sine = l.sine && typeof l.sine === 'object' ? l.sine : {};
+    const sway = l.sway && typeof l.sway === 'object' ? l.sway : {};
     return {
       id: String(l.id || `cl-${i}`),
       name: String(l.name || 'カスタム'),
@@ -138,6 +139,18 @@ function normalizeCustomLayers(layers) {
         periodMs: Number(sine.periodMs) || 4000,
         phase: Number(sine.phase) || 0,
       }),
+      sway: {
+        enabled: !!sway.enabled,
+        pivotX: Number(sway.pivotX) || 0,
+        pivotY: Number.isFinite(Number(sway.pivotY)) ? Number(sway.pivotY) : -40,
+        width: Math.max(0, Math.min(800, Number(sway.width) || 0)),
+        maxAngleDeg: Math.max(0, Math.min(25, Number(sway.maxAngleDeg) || 6)),
+        falloff: Math.max(0, Math.min(3, Number.isFinite(Number(sway.falloff)) ? Number(sway.falloff) : 1)),
+        reach: Math.max(8, Math.min(600, Number(sway.reach) || 140)),
+        periodMs: Math.max(400, Number(sway.periodMs) || 3200),
+        follow: clamp01Num(sway.follow, 0.5),
+        audio: Math.max(0, Math.min(2, Number(sway.audio) || 0)),
+      },
     };
   }).filter((l) => l.path || l.name);
 }

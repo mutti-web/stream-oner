@@ -34,6 +34,7 @@ const serveAvatarOverlayStatic = createRendererStaticHandler(RENDERER_DIR, {
   '/vendor/pixi.min.js': 'vendor/pixi.min.js',
   '/shared/avatar-constants.js': 'shared/avatar-constants.js',
   '/shared/avatar-face-mesh.js': 'shared/avatar-face-mesh.js',
+  '/shared/avatar-sway-mesh.js': 'shared/avatar-sway-mesh.js',
 });
 
 const MEDIAPIPE_DIR = path.join(RENDERER_DIR, 'vendor/mediapipe');
