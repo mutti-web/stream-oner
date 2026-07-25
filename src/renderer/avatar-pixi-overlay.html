@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Avatar Pixi Overlay - OBS</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    #stage {
+      position: absolute;
+      inset: 0;
+    }
+    #hud {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      z-index: 10;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #f2f2f2;
+      font-size: 12px;
+      line-height: 1.4;
+      min-width: 220px;
+      pointer-events: auto;
+    }
+    #hud h1 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    #hud label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0;
+    }
+    #hud input[type="range"] {
+      flex: 1;
+    }
+    #hud .meta {
+      opacity: 0.8;
+      margin-top: 6px;
+    }
+    #face-status[data-state="ok"] { color: #7dffa3; opacity: 1; }
+    #face-status[data-state="lost"] { color: #ffb4a2; opacity: 1; }
+    #face-status[data-state="manual"] { color: #ffe08a; opacity: 1; }
+    #face-status[data-state="off"] { opacity: 0.7; }
+    #hud.hidden-for-obs {
+      display: none;
+    }
+  </style>
+  <style id="custom-user-css"></style>
+  <script src="/shared/custom-css-loader.js"></script>
+</head>
+<body>
+  <div id="stage"></div>
+  <aside id="hud">
+    <h1>Pixi overlay（デバッグ）</h1>
+    <div class="meta" id="face-status" data-state="off">顔トラッキング: …</div>
+    <label>yaw <input id="yaw" type="range" min="-1" max="1" value="0" step="0.01" /><span id="yaw-val">0</span></label>
+    <label>pitch <input id="pitch" type="range" min="-1" max="1" value="0" step="0.01" /><span id="pitch-val">0</span></label>
+    <div class="meta" id="status">WS: connecting…</div>
+  </aside>
+  <script src="/shared/avatar-constants.js"></script>
+  <script src="/shared/avatar-face-mesh.js"></script>
+  <script src="/shared/avatar-sway-mesh.js"></script>
+  <script src="/vendor/pixi.min.js"></script>
+  <script src="/avatar-pixi-runtime.js"></script>
+</body>
+</html>

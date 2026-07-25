@@ -41,6 +41,9 @@ function buildAvatarPayload(opts = {}) {
     p2Label: readMdValue(document.getElementById('av-p2-label')).trim() || '配信者B',
     smileDetectEnabled: document.getElementById('av-smile-detect').checked,
     smileSensitivity: readMdNum(document.getElementById('av-smile-sensitivity'), 50),
+    faceTrackEnabled: !!document.getElementById('av-face-track')?.checked,
+    faceAssignSwap: !!document.getElementById('av-face-assign-swap')?.checked,
+    cameraDeviceId: readMdValue(document.getElementById('av-camera')) || '',
   };
   if (window.avatarSettingsUI) {
     Object.assign(payload, window.avatarSettingsUI.collectAll());
@@ -96,6 +99,419 @@ function fillMicSelect(selectEl, devices, selectedId) {
   }
 }
 
+function fillCameraSelect(selectEl, devices, selectedId) {
+  if (!selectEl) return;
+  const prev = selectedId !== undefined ? selectedId : selectEl.value;
+  selectEl.innerHTML = '';
+  const empty = document.createElement('md-select-option');
+  empty.value = '';
+  empty.innerHTML = '<div slot="headline">— 既定カメラ —</div>';
+  selectEl.appendChild(empty);
+  devices.forEach((d) => {
+    const opt = document.createElement('md-select-option');
+    opt.value = d.deviceId;
+    const label = d.label || `カメラ (${d.deviceId.slice(0, 8)}…)`;
+    const head = document.createElement('div');
+    head.setAttribute('slot', 'headline');
+    head.textContent = label;
+    opt.appendChild(head);
+    selectEl.appendChild(opt);
+  });
+  queueMicrotask(() => {
+    try { setMdFieldValue(selectEl, prev || ''); } catch (_) {}
+  });
+}
+
+function updateFaceTrackStatus(st) {
+  const el = document.getElementById('av-face-status');
+  if (!el) return;
+  const on = !!document.getElementById('av-face-track')?.checked;
+  if (!on) {
+    el.textContent = '顔トラッキング: オフ';
+    if (facePreviewVisible) setFacePreviewVisible(false, { silent: true });
+    else drawFacePreviewIdle();
+    return;
+  }
+  if (st?.faceError) {
+    el.textContent = `顔トラッキング: エラー — ${st.faceError}`;
+    return;
+  }
+  if (facePreviewVisible && lastFacePreview?.calibrating) {
+    el.textContent = '顔トラッキング: 正面を記憶中… 正面をキープ';
+    return;
+  }
+  el.textContent = st?.faceRunning ? '顔トラッキング: 稼働中' : '顔トラッキング: 待機中';
+}
+
+/** @type {object|null} */
+let lastFacePreview = null;
+/** 設定プレビュー表示中か（既定 OFF・配信向け） */
+let facePreviewVisible = false;
+/** @type {ReturnType<typeof setTimeout>|null} */
+let facePreviewAutoOffTimer = null;
+const FACE_PREVIEW_AUTO_OFF_MS = 5 * 60 * 1000;
+
+function clearFacePreviewAutoOff() {
+  if (facePreviewAutoOffTimer) {
+    clearTimeout(facePreviewAutoOffTimer);
+    facePreviewAutoOffTimer = null;
+  }
+}
+
+function syncFacePreviewToggleUi() {
+  const btn = document.getElementById('av-face-preview-toggle');
+  const wrap = document.getElementById('av-face-preview-wrap');
+  const hint = document.getElementById('av-face-preview-hint');
+  if (wrap) wrap.hidden = !facePreviewVisible;
+  if (btn) btn.textContent = facePreviewVisible ? 'プレビューを隠す' : 'プレビューを表示';
+  if (hint) {
+    hint.textContent = facePreviewVisible
+      ? 'プレビュー表示中。5分で自動OFF（または「隠す」）。配信中は隠した方が軽いです。'
+      : '配信中は非表示推奨。表示すると表情・向きの確認用に負荷が増えます（5分で自動OFF）。';
+  }
+}
+
+/**
+ * @param {boolean} on
+ * @param {{ silent?: boolean, reason?: string }} [opts]
+ */
+async function setFacePreviewVisible(on, opts = {}) {
+  const next = !!on;
+  clearFacePreviewAutoOff();
+  facePreviewVisible = next;
+  if (!next) lastFacePreview = null;
+  syncFacePreviewToggleUi();
+
+  try {
+    await api.setAvatarFacePreview?.(next);
+  } catch (_) { /* */ }
+
+  if (next) {
+    drawFacePreviewIdle();
+    facePreviewAutoOffTimer = setTimeout(() => {
+      setFacePreviewVisible(false, { reason: 'timeout' });
+    }, FACE_PREVIEW_AUTO_OFF_MS);
+    if (!opts.silent) {
+      showFb('av-fb', 'プレビューを表示しました（5分で自動OFF）。');
+    }
+  } else {
+    drawFacePreviewIdle();
+    if (!opts.silent) {
+      if (opts.reason === 'timeout') {
+        showFb('av-fb', 'プレビューを5分経過のため自動で非表示にしました。');
+      }
+    }
+  }
+}
+
+/** face-capture の PREVIEW_LANDMARK_IDX と同じ並び */
+const PREVIEW_OVAL_LEN = 36;
+const PREVIEW_LEYE_LEN = 6;
+const PREVIEW_REYE_LEN = 6;
+
+function getFacePreviewCanvas() {
+  return document.getElementById('av-face-preview');
+}
+
+function readFacePreviewLabels() {
+  const p1 = (readMdValue(document.getElementById('av-p1-label')) || avConfigCache?.p1Label || '配信者A').trim() || '配信者A';
+  const p2 = (readMdValue(document.getElementById('av-p2-label')) || avConfigCache?.p2Label || '配信者B').trim() || '配信者B';
+  return { p1, p2 };
+}
+
+/** ラジアン or 相対 pose → 描画用の傾き（おおよそ ±0.7rad をフル） */
+function resolveHeadAngles(slot) {
+  const e = slot?.euler;
+  if (e && Number.isFinite(e.yaw)) {
+    return {
+      yaw: Number(e.yaw) || 0,
+      pitch: Number(e.pitch) || 0,
+      roll: Number(e.roll) || 0,
+    };
+  }
+  // フォールバック: 既存の相対 yaw/pitch（約 ±1）
+  return {
+    yaw: (Number(slot?.yaw) || 0) * 0.55,
+    pitch: (Number(slot?.pitch) || 0) * 0.45,
+    roll: 0,
+  };
+}
+
+function blendVal(blend, key, fallback = 0) {
+  const v = blend?.[key];
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : fallback;
+}
+
+/**
+ * 肩＋3D回転する頭部シルエット（実写なし）。
+ * 表情は blendshapes で目・口・眉を変化。
+ */
+function drawPersonSilhouette(ctx, box, slot, opts) {
+  const { x, y, w, h } = box;
+  const active = !!slot?.tracking;
+  const label = opts.label || '';
+  const color = opts.color || 'rgba(56, 189, 248, 0.95)';
+  const { yaw, pitch, roll } = resolveHeadAngles(slot);
+  const blend = slot?.blend || null;
+
+  const blinkL = Math.max(blendVal(blend, 'eyeBlinkLeft'), blendVal(blend, 'eyeBlinkRight') * 0.35);
+  const blinkR = Math.max(blendVal(blend, 'eyeBlinkRight'), blendVal(blend, 'eyeBlinkLeft') * 0.35);
+  const jaw = blendVal(blend, 'jawOpen');
+  const smile = (blendVal(blend, 'mouthSmileLeft') + blendVal(blend, 'mouthSmileRight')) * 0.5;
+  const browUp = blendVal(blend, 'browInnerUp');
+  const browDn = (blendVal(blend, 'browDownLeft') + blendVal(blend, 'browDownRight')) * 0.5;
+
+  const cx = x + w * 0.5;
+  const cy = y + h * 0.38;
+  const headR = Math.min(w, h) * 0.22;
+
+  ctx.save();
+
+  // ラベル
+  if (label) {
+    ctx.fillStyle = active ? color : 'rgba(148, 163, 184, 0.85)';
+    ctx.font = '600 12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const maxW = w - 8;
+    let text = label;
+    if (ctx.measureText(text).width > maxW) {
+      while (text.length > 1 && ctx.measureText(`${text}…`).width > maxW) text = text.slice(0, -1);
+      text = `${text}…`;
+    }
+    ctx.fillText(text, cx, y + 6);
+  }
+
+  // 肩〜胴（カメラ左右反転に合わせ、yaw は見た目用に反転）
+  const viewYaw = -yaw;
+  const shoulderShift = viewYaw * headR * 0.35;
+  ctx.fillStyle = active ? 'rgba(100, 130, 160, 0.5)' : 'rgba(100, 116, 139, 0.28)';
+  ctx.beginPath();
+  ctx.moveTo(cx - headR * 1.7 + shoulderShift * 0.3, cy + headR * 1.45);
+  ctx.quadraticCurveTo(cx - headR * 2.3, cy + headR * 2.6, cx - headR * 2.1, y + h + 2);
+  ctx.lineTo(cx + headR * 2.1, y + h + 2);
+  ctx.quadraticCurveTo(cx + headR * 2.3, cy + headR * 2.6, cx + headR * 1.7 + shoulderShift * 0.3, cy + headR * 1.45);
+  ctx.closePath();
+  ctx.fill();
+
+  // 首
+  ctx.fillRect(cx - headR * 0.22 + shoulderShift * 0.15, cy + headR * 0.7, headR * 0.44, headR * 0.8);
+
+  // 頭部（行列由来の yaw/pitch/roll）
+  ctx.save();
+  ctx.translate(cx + shoulderShift * 0.2, cy + pitch * headR * 0.25);
+  ctx.rotate(roll * 0.85);
+  const sx = 0.92 + Math.cos(viewYaw) * 0.08;
+  const sy = 1.05 - Math.abs(pitch) * 0.08;
+  ctx.scale(sx, sy);
+  // 顔の奥行き感: yaw で左右の幅をわずかに変える楕円
+  ctx.beginPath();
+  ctx.ellipse(0, 0, headR * (0.88 + Math.abs(Math.sin(viewYaw)) * 0.06), headR, viewYaw * 0.12, 0, Math.PI * 2);
+  ctx.fillStyle = active ? 'rgba(120, 150, 180, 0.72)' : 'rgba(100, 116, 139, 0.38)';
+  ctx.fill();
+
+  // 向きガイド（鼻方向の短い線）
+  if (active) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, headR * 0.05);
+    ctx.lineTo(Math.sin(viewYaw) * headR * 0.55, Math.sin(pitch) * headR * 0.35 + headR * 0.15);
+    ctx.stroke();
+  }
+
+  // 眉
+  const browY = -headR * (0.28 - browUp * 0.08 + browDn * 0.06);
+  ctx.strokeStyle = active ? 'rgba(226, 232, 240, 0.9)' : 'rgba(148, 163, 184, 0.55)';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  for (const side of [-1, 1]) {
+    const bx = side * headR * 0.32 + Math.sin(viewYaw) * headR * 0.08;
+    ctx.beginPath();
+    ctx.moveTo(bx - headR * 0.14, browY + side * browDn * headR * 0.02);
+    ctx.quadraticCurveTo(bx, browY - headR * 0.02, bx + headR * 0.14, browY - side * browDn * headR * 0.02);
+    ctx.stroke();
+  }
+
+  // 目（まばたきで縦につぶれる）
+  const eyeY = -headR * 0.08;
+  for (const [side, blink] of [[-1, blinkL], [1, blinkR]]) {
+    const ex = side * headR * 0.32 + Math.sin(viewYaw) * headR * 0.1;
+    const ew = headR * 0.12;
+    const eh = headR * 0.08 * (1 - blink * 0.92);
+    ctx.fillStyle = active ? 'rgba(241, 245, 249, 0.95)' : 'rgba(203, 213, 225, 0.55)';
+    ctx.beginPath();
+    ctx.ellipse(ex, eyeY, ew, Math.max(1.2, eh), 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 口（jawOpen / smile）
+  const mouthY = headR * (0.32 + jaw * 0.06);
+  const mouthW = headR * (0.22 + smile * 0.1);
+  const mouthH = headR * (0.04 + jaw * 0.18 + smile * 0.02);
+  ctx.strokeStyle = active ? color : 'rgba(148, 163, 184, 0.7)';
+  ctx.fillStyle = active ? 'rgba(15, 23, 42, 0.55)' : 'rgba(51, 65, 85, 0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (jaw > 0.12) {
+    ctx.ellipse(Math.sin(viewYaw) * headR * 0.05, mouthY, mouthW, mouthH, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.moveTo(-mouthW + Math.sin(viewYaw) * headR * 0.05, mouthY);
+    ctx.quadraticCurveTo(
+      Math.sin(viewYaw) * headR * 0.05,
+      mouthY + headR * (0.06 + smile * 0.1),
+      mouthW + Math.sin(viewYaw) * headR * 0.05,
+      mouthY,
+    );
+    ctx.stroke();
+  }
+
+  ctx.restore(); // head transform
+
+  // 未検出時の薄表示
+  if (!active) {
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('未検出', cx, cy + headR * 1.9);
+  }
+
+  ctx.restore();
+}
+
+function strokePolyline(ctx, pts, close) {
+  if (!pts?.length) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  if (close) ctx.closePath();
+  ctx.stroke();
+}
+
+function mapPreviewPoints(points, w, h) {
+  if (!points?.length) return null;
+  // セルフィー感のため左右反転（実写は出さない）
+  return points.map(([x, y]) => [(1 - Number(x)) * w, Number(y) * h]);
+}
+
+function drawLandmarkMarks(ctx, points, color) {
+  if (!points?.length) return;
+  const oval = points.slice(0, PREVIEW_OVAL_LEN);
+  const lEye = points.slice(PREVIEW_OVAL_LEN, PREVIEW_OVAL_LEN + PREVIEW_LEYE_LEN);
+  const rEye = points.slice(
+    PREVIEW_OVAL_LEN + PREVIEW_LEYE_LEN,
+    PREVIEW_OVAL_LEN + PREVIEW_LEYE_LEN + PREVIEW_REYE_LEN,
+  );
+  const lips = points.slice(PREVIEW_OVAL_LEN + PREVIEW_LEYE_LEN + PREVIEW_REYE_LEN);
+
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 1.15;
+  ctx.lineJoin = 'round';
+  strokePolyline(ctx, oval, true);
+  strokePolyline(ctx, lEye, true);
+  strokePolyline(ctx, rEye, true);
+  strokePolyline(ctx, lips, true);
+  ctx.globalAlpha = 1;
+}
+
+function drawFacePreviewIdle() {
+  const canvas = getFacePreviewCanvas();
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const labels = readFacePreviewLabels();
+  const mode = readMdValue(document.getElementById('av-display-mode')) || 'both';
+  if (mode === 'both') {
+    drawPersonSilhouette(ctx, { x: 0, y: 0, w: w / 2, h }, null, { label: labels.p1, color: 'rgba(56, 189, 248, 0.7)' });
+    drawPersonSilhouette(ctx, { x: w / 2, y: 0, w: w / 2, h }, null, { label: labels.p2, color: 'rgba(251, 146, 60, 0.7)' });
+    // 中央の区切り
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(w / 2, 8);
+    ctx.lineTo(w / 2, h - 8);
+    ctx.stroke();
+  } else if (mode === 'p2') {
+    drawPersonSilhouette(ctx, { x: 0, y: 0, w, h }, null, { label: labels.p2, color: 'rgba(251, 146, 60, 0.7)' });
+  } else {
+    drawPersonSilhouette(ctx, { x: 0, y: 0, w, h }, null, { label: labels.p1, color: 'rgba(56, 189, 248, 0.7)' });
+  }
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.9)';
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('トラッキング OFF / 待機', w / 2, h - 14);
+}
+
+function drawFacePreview(preview) {
+  if (!facePreviewVisible) return;
+  lastFacePreview = preview || null;
+  const canvas = getFacePreviewCanvas();
+  if (!canvas) return;
+  const on = !!document.getElementById('av-face-track')?.checked;
+  if (!on) {
+    drawFacePreviewIdle();
+    return;
+  }
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const p1 = preview?.p1 || {};
+  const p2 = preview?.p2 || {};
+  const tracking = !!(preview?.tracking || p1.tracking || p2.tracking);
+  const mode = readMdValue(document.getElementById('av-display-mode')) || 'both';
+  const labels = readFacePreviewLabels();
+  const colorP1 = 'rgba(56, 189, 248, 0.95)';
+  const colorP2 = 'rgba(251, 146, 60, 0.95)';
+
+  if (mode === 'both') {
+    drawPersonSilhouette(ctx, { x: 0, y: 0, w: w / 2, h }, p1, { label: labels.p1, color: colorP1 });
+    drawPersonSilhouette(ctx, { x: w / 2, y: 0, w: w / 2, h }, p2, { label: labels.p2, color: colorP2 });
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(w / 2, 8);
+    ctx.lineTo(w / 2, h - 8);
+    ctx.stroke();
+    // ランドマークは全体座標のまま薄く重ねる（割り当て確認用）
+    drawLandmarkMarks(ctx, mapPreviewPoints(p1.points, w, h), colorP1);
+    drawLandmarkMarks(ctx, mapPreviewPoints(p2.points, w, h), colorP2);
+  } else if (mode === 'p2') {
+    drawPersonSilhouette(ctx, { x: 0, y: 0, w, h }, p2, { label: labels.p2, color: colorP2 });
+    drawLandmarkMarks(ctx, mapPreviewPoints(p2.points, w, h), colorP2);
+  } else {
+    drawPersonSilhouette(ctx, { x: 0, y: 0, w, h }, p1, { label: labels.p1, color: colorP1 });
+    drawLandmarkMarks(ctx, mapPreviewPoints(p1.points, w, h), colorP1);
+  }
+
+  const cap = document.getElementById('av-face-preview-caption');
+  if (cap) {
+    if (preview?.calibrating) {
+      cap.textContent = '正面を記憶しています… 動かず正面をキープしてください。';
+    } else if (tracking) {
+      cap.textContent = '実写なし。頭の向き・まばたき・口の開閉と表示名で割り当てを確認できます。';
+    } else {
+      cap.textContent = '顔を検出できていません。カメラに正面を向けてください。';
+    }
+  }
+  if (preview?.calibrating) {
+    const el = document.getElementById('av-face-status');
+    if (el) el.textContent = '顔トラッキング: 正面を記憶中… 正面をキープ';
+  } else if (tracking) {
+    const el = document.getElementById('av-face-status');
+    if (el && !el.textContent.includes('エラー')) {
+      el.textContent = '顔トラッキング: 稼働中（検出中）';
+    }
+  }
+}
+
 async function scanMics() {
   try {
     await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -105,6 +521,17 @@ async function scanMics() {
   }
   const all = await navigator.mediaDevices.enumerateDevices();
   return all.filter((d) => d.kind === 'audioinput');
+}
+
+async function scanCameras() {
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+  } catch (e) {
+    showFb('av-fb', 'カメラ許可が必要です: ' + e.message, 'err');
+    return [];
+  }
+  const all = await navigator.mediaDevices.enumerateDevices();
+  return all.filter((d) => d.kind === 'videoinput');
 }
 
 function updateAvVuMeters(levels) {
@@ -130,6 +557,10 @@ async function initAvatar() {
   setMdFieldValue(document.getElementById('av-p2-label'), cfg.p2Label || '配信者B');
   document.getElementById('av-smile-detect').checked = !!cfg.smileDetectEnabled;
   setMdFieldValue(document.getElementById('av-smile-sensitivity'), cfg.smileSensitivity ?? 50);
+  const faceSw = document.getElementById('av-face-track');
+  if (faceSw) faceSw.checked = !!cfg.faceTrackEnabled;
+  const swapSw = document.getElementById('av-face-assign-swap');
+  if (swapSw) swapSw.checked = !!cfg.faceAssignSwap;
   setMdFieldValue(document.getElementById('av-obs-url'), cfg.obsUrl || 'http://127.0.0.1:3003/overlay');
 
   if (window.avatarSettingsUI) {
@@ -143,8 +574,16 @@ async function initAvatar() {
   fillMicSelect(document.getElementById('av-mic-a'), mics, cfg.micADeviceId);
   fillMicSelect(document.getElementById('av-mic-b'), mics, cfg.micBDeviceId);
 
+  const cams = await scanCameras().catch(() => []);
+  fillCameraSelect(document.getElementById('av-camera'), cams, cfg.cameraDeviceId || '');
+
   const st = await api.getAvatarStatus().catch(() => ({ serverRunning: false }));
   setAvBadge(st);
+  updateFaceTrackStatus(st);
+  facePreviewVisible = false;
+  syncFacePreviewToggleUi();
+  try { await api.setAvatarFacePreview?.(false); } catch (_) { /* */ }
+  drawFacePreviewIdle();
   suppressAutoSave--;
   avatarFormsHydrated = true;
 }
@@ -152,11 +591,26 @@ async function initAvatar() {
 function bindAvatarActions() {
   document.getElementById('av-display-mode')?.addEventListener('change', () => {
     applyAvDisplayModeUi();
+    if (facePreviewVisible) {
+      if (lastFacePreview) drawFacePreview(lastFacePreview);
+      else drawFacePreviewIdle();
+    }
     debouncedAvatar();
   });
   const debouncedLabelUi = debounce(updateAvatarLabelUi, 300);
-  document.getElementById('av-p1-label')?.addEventListener('input', debouncedLabelUi);
-  document.getElementById('av-p2-label')?.addEventListener('input', debouncedLabelUi);
+  const refreshFacePreviewLabels = () => {
+    if (!facePreviewVisible) return;
+    if (lastFacePreview) drawFacePreview(lastFacePreview);
+    else drawFacePreviewIdle();
+  };
+  document.getElementById('av-p1-label')?.addEventListener('input', () => {
+    debouncedLabelUi();
+    refreshFacePreviewLabels();
+  });
+  document.getElementById('av-p2-label')?.addEventListener('input', () => {
+    debouncedLabelUi();
+    refreshFacePreviewLabels();
+  });
 
   document.getElementById('av-scan-mics').addEventListener('click', async () => {
     const mics = await scanMics();
@@ -164,6 +618,56 @@ function bindAvatarActions() {
     fillMicSelect(document.getElementById('av-mic-a'), mics);
     fillMicSelect(document.getElementById('av-mic-b'), mics);
     showFb('av-fb', `マイク ${mics.length} 件を検出しました。`);
+  });
+
+  document.getElementById('av-scan-cameras')?.addEventListener('click', async () => {
+    const cams = await scanCameras();
+    if (!cams.length) return;
+    fillCameraSelect(document.getElementById('av-camera'), cams);
+    showFb('av-fb', `カメラ ${cams.length} 件を検出しました。`);
+  });
+
+  document.getElementById('av-face-track')?.addEventListener('change', () => {
+    updateFaceTrackStatus();
+    if (!document.getElementById('av-face-track')?.checked) {
+      setFacePreviewVisible(false, { silent: true });
+    }
+    debouncedAvatar();
+  });
+  document.getElementById('av-face-assign-swap')?.addEventListener('change', () => debouncedAvatar());
+  document.getElementById('av-camera')?.addEventListener('change', () => debouncedAvatar());
+
+  document.getElementById('av-face-preview-toggle')?.addEventListener('click', async () => {
+    const trackOn = !!document.getElementById('av-face-track')?.checked;
+    if (!facePreviewVisible && !trackOn) {
+      showFb('av-fb', '先に顔トラッキングを ON にしてください。', 'err');
+      return;
+    }
+    await setFacePreviewVisible(!facePreviewVisible);
+  });
+
+  document.getElementById('av-face-calib')?.addEventListener('click', async () => {
+    const on = !!document.getElementById('av-face-track')?.checked;
+    if (!on) {
+      showFb('av-fb', '先に顔トラッキングを ON にしてください。', 'err');
+      return;
+    }
+    const r = await api.recalibrateAvatarFace?.().catch((e) => ({ success: false, error: e.message }));
+    if (r?.success) {
+      showFb('av-fb', '正面の記憶を開始しました。正面をキープしてください。');
+      const el = document.getElementById('av-face-status');
+      if (el) el.textContent = '顔トラッキング: 正面を記憶中… 正面をキープ';
+    } else {
+      showFb('av-fb', '正面の記憶に失敗: ' + (r?.error || '不明'), 'err');
+    }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    clearFacePreviewAutoOff();
+    if (facePreviewVisible) {
+      facePreviewVisible = false;
+      try { api.setAvatarFacePreview?.(false); } catch (_) { /* */ }
+    }
   });
 
   function closestActionButton(ev, selector) {

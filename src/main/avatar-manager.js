@@ -13,6 +13,7 @@ const { isPortAvailable } = require('./port-utils');
 const staticFileCache = require('./static-file-cache');
 const { createRendererStaticHandler } = require('./serve-renderer-static');
 const AvatarAudioManager = require('./avatar-audio-manager');
+const AvatarFaceManager = require('./avatar-face-manager');
 const slotCfg = require('./avatar-slot-config');
 
 require('../renderer/shared/avatar-constants.js');
@@ -23,11 +24,59 @@ const AUDIO_LEVEL_DELTA = AC.AUDIO_LEVEL_DELTA ?? 2;
 const RENDERER_DIR = path.join(__dirname, '../renderer');
 const customCss = require('./custom-css');
 
+const PIXI_OVERLAY_HTML = path.join(RENDERER_DIR, 'avatar-pixi-overlay.html');
+
 const serveAvatarOverlayStatic = createRendererStaticHandler(RENDERER_DIR, {
-  '/avatar-overlay.css': 'avatar-overlay.css',
-  '/avatar-overlay-runtime.js': 'avatar-overlay-runtime.js',
+  '/avatar-pixi-runtime.js': 'avatar-pixi-runtime.js',
+  '/avatar-face-capture.js': 'avatar-face-capture.js',
+  '/vendor/pixi.min.js': 'vendor/pixi.min.js',
   '/shared/avatar-constants.js': 'shared/avatar-constants.js',
+  '/shared/avatar-face-mesh.js': 'shared/avatar-face-mesh.js',
+  '/shared/avatar-sway-mesh.js': 'shared/avatar-sway-mesh.js',
 });
+
+const MEDIAPIPE_DIR = path.join(RENDERER_DIR, 'vendor/mediapipe');
+const FACE_CAPTURE_HTML = path.join(RENDERER_DIR, 'avatar-face-capture.html');
+
+const MEDIAPIPE_MIME = {
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.wasm': 'application/wasm',
+  '.task': 'application/octet-stream',
+  '.html': 'text/html; charset=utf-8',
+};
+
+/** MediaPipe 同梱アセット（WASM は binary。file:// では fetch 失敗するため HTTP 配信） */
+function tryServeMediapipe(url, res) {
+  if (!url.startsWith('/vendor/mediapipe/')) return false;
+  const rel = decodeURIComponent(url.slice('/vendor/mediapipe/'.length));
+  if (!rel || rel.includes('..') || path.isAbsolute(rel)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return true;
+  }
+  const filePath = path.resolve(MEDIAPIPE_DIR, rel);
+  const relToRoot = path.relative(MEDIAPIPE_DIR, filePath);
+  if (relToRoot.startsWith('..') || path.isAbsolute(relToRoot)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return true;
+  }
+  const ext = path.extname(filePath).toLowerCase();
+  staticFileCache.readBuffer(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('Not found');
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': MEDIAPIPE_MIME[ext] || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=86400',
+    });
+    res.end(data);
+  });
+  return true;
+}
 
 const K = {
   enabled:          'avatar.enabled',
@@ -42,6 +91,9 @@ const K = {
   p2Slot:           'avatar.p2Slot',
   smileDetect:      'avatar.smileDetectEnabled',
   smileSensitivity: 'avatar.smileSensitivity',
+  faceTrackEnabled: 'avatar.faceTrackEnabled',
+  cameraDeviceId:   'avatar.cameraDeviceId',
+  faceAssignSwap:   'avatar.faceAssignSwap',
 };
 
 const SLOT_KEYS = [
@@ -52,10 +104,9 @@ const SLOT_KEYS = [
 const DISPLAY_MODES = new Set(['both', 'p1', 'p2']);
 
 class AvatarManager extends EventEmitter {
-  constructor(port, htmlPath, store, previewHtmlPath) {
+  constructor(port, store, previewHtmlPath) {
     super();
     this._port = port;
-    this._htmlPath = htmlPath;
     this._previewHtmlPath = previewHtmlPath;
     this._store = store;
     this._migrated = false;
@@ -67,8 +118,19 @@ class AvatarManager extends EventEmitter {
       (levels) => this._onAudioLevels(levels),
       (msg) => this._updateStatus({ error: msg }),
     );
+    this._face = new AvatarFaceManager(
+      (pose) => this._onFacePose(pose),
+      (msg) => this._updateStatus({ faceError: msg }),
+      (preview) => this._onFacePreview(preview),
+    );
 
-    this._status = { serverRunning: false, audioRunning: false, error: null };
+    this._status = { serverRunning: false, audioRunning: false, faceRunning: false, error: null, faceError: null };
+    this._lastPose = {
+      yaw: 0, pitch: 0, tracking: false, faceCount: 0,
+      p1: { yaw: 0, pitch: 0, tracking: false },
+      p2: { yaw: 0, pitch: 0, tracking: false },
+    };
+    this._lastPoseSentAt = 0;
     this._lastLevels = {
       p1: 0, p2: 0,
       p1Speaking: false, p2Speaking: false,
@@ -116,11 +178,36 @@ class AvatarManager extends EventEmitter {
     slotCfg.migrateSlotAudioFromGlobal(
       this._store, K.p1Slot, K.p2Slot, K.speakThreshold, K.sensitivity,
     );
+    // 1.14: マスク既定ONは目・口を消すことがある → オプトインへ一度リセット
+    if (!this._store.get('avatar.migratedFaceMaskOptIn', false)) {
+      for (const key of [K.p1Slot, K.p2Slot]) {
+        const raw = this._store.get(key, null);
+        if (raw && typeof raw === 'object' && raw.faceMaskEnabled) {
+          raw.faceMaskEnabled = false;
+          this._store.set(key, raw);
+        }
+      }
+      this._store.set('avatar.migratedFaceMaskOptIn', true);
+    }
+    // 1.15: 髪・鼻はメイン部位からカスタム部位へ降格（見え方は数値で引き継ぐ）
+    if (!this._store.get('avatar.migratedHairNoseToCustom', false)) {
+      for (const key of [K.p1Slot, K.p2Slot]) {
+        const raw = this._store.get(key, null);
+        if (!raw || typeof raw !== 'object') continue;
+        const { slot, changed } = slotCfg.demoteHairNoseToCustom(raw);
+        if (changed) this._store.set(key, slot);
+      }
+      this._store.set('avatar.migratedHairNoseToCustom', true);
+    }
     this._migrated = true;
   }
 
   getStatus() {
-    return { ...this._status, audioRunning: this._audio.isRunning() };
+    return {
+      ...this._status,
+      audioRunning: this._audio.isRunning(),
+      faceRunning: this._face.isRunning(),
+    };
   }
 
   getSlot(slotId) {
@@ -153,6 +240,9 @@ class AvatarManager extends EventEmitter {
       p2Label: s.get(K.p2Label, '配信者B'),
       smileDetectEnabled: s.get(K.smileDetect, false),
       smileSensitivity: s.get(K.smileSensitivity, 50),
+      faceTrackEnabled: s.get(K.faceTrackEnabled, false),
+      cameraDeviceId: s.get(K.cameraDeviceId, ''),
+      faceAssignSwap: s.get(K.faceAssignSwap, false),
       obsUrl: `${base}/overlay`,
       previewUrl: `${base}/preview`,
       wsUrl: `ws://127.0.0.1:${this._port}`,
@@ -167,6 +257,9 @@ class AvatarManager extends EventEmitter {
     const audioDirty = [
       'enabled', 'micADeviceId', 'micBDeviceId',
       'smileDetectEnabled', 'smileSensitivity',
+    ].some((k) => settings[k] !== undefined);
+    const faceDirty = [
+      'enabled', 'faceTrackEnabled', 'cameraDeviceId', 'faceAssignSwap', 'displayMode',
     ].some((k) => settings[k] !== undefined);
     const slotAudioDirty = ['p1', 'p2'].some((p) =>
       settings[`${p}_speakThreshold`] !== undefined ||
@@ -184,6 +277,9 @@ class AvatarManager extends EventEmitter {
     if (settings.p2Label !== undefined) s.set(K.p2Label, settings.p2Label);
     if (settings.smileDetectEnabled !== undefined) s.set(K.smileDetect, !!settings.smileDetectEnabled);
     if (settings.smileSensitivity !== undefined) s.set(K.smileSensitivity, Number(settings.smileSensitivity));
+    if (settings.faceTrackEnabled !== undefined) s.set(K.faceTrackEnabled, !!settings.faceTrackEnabled);
+    if (settings.cameraDeviceId !== undefined) s.set(K.cameraDeviceId, String(settings.cameraDeviceId || ''));
+    if (settings.faceAssignSwap !== undefined) s.set(K.faceAssignSwap, !!settings.faceAssignSwap);
 
     const saveSlotFromSettings = (slotId, storeKey, prefix) => {
       if (settings[`${prefix}Slot`]) {
@@ -200,6 +296,7 @@ class AvatarManager extends EventEmitter {
     saveSlotFromSettings('p2', K.p2Slot, 'p2');
 
     if (audioDirty || slotAudioDirty) await this._syncAudioFromStore();
+    if (faceDirty) await this._syncFaceFromStore();
     if (this._server) this._broadcast(this._buildOverlayInit());
     this.emit('config-changed', this.getConfig());
     return { success: true };
@@ -207,6 +304,7 @@ class AvatarManager extends EventEmitter {
 
   async applyEnabledState() {
     await this._syncAudioFromStore();
+    await this._syncFaceFromStore();
   }
 
   _captureConfig() {
@@ -242,6 +340,7 @@ class AvatarManager extends EventEmitter {
         p1Label: s.get(K.p1Label, '配信者A'),
         p2Label: s.get(K.p2Label, '配信者B'),
         smileDetectEnabled: s.get(K.smileDetect, false),
+        faceTrackEnabled: !!s.get(K.faceTrackEnabled, false),
         p1: slotCfg.slotToOverlay('p1', p1, base, (fp) => this._exists(fp)),
         p2: slotCfg.slotToOverlay('p2', p2, base, (fp) => this._exists(fp)),
       },
@@ -268,6 +367,103 @@ class AvatarManager extends EventEmitter {
     } catch (e) {
       this._updateStatus({ audioRunning: false, error: e.message });
     }
+  }
+
+  _emptyPose() {
+    return {
+      yaw: 0, pitch: 0, tracking: false, faceCount: 0,
+      p1: { yaw: 0, pitch: 0, tracking: false },
+      p2: { yaw: 0, pitch: 0, tracking: false },
+    };
+  }
+
+  async _syncFaceFromStore() {
+    const enabled = this._store.get(K.enabled, false);
+    const faceOn = !!this._store.get(K.faceTrackEnabled, false);
+    const cameraDeviceId = String(this._store.get(K.cameraDeviceId, '') || '');
+    const faceAssignSwap = !!this._store.get(K.faceAssignSwap, false);
+    const displayMode = this.getDisplayMode();
+    // MediaPipe は avatar HTTP 経由。サーバー未起動なら開始しない
+    if (!enabled || !faceOn || !this._server) {
+      this._face.stop();
+      this._lastPose = this._emptyPose();
+      if (this._server) this._broadcast({ type: 'pose', ...this._lastPose });
+      this._updateStatus({ faceRunning: false, faceError: null });
+      return;
+    }
+    try {
+      await this._face.start({
+        enabled: true,
+        cameraDeviceId,
+        faceAssignSwap,
+        displayMode,
+        assetBaseUrl: `http://127.0.0.1:${this._port}`,
+      });
+      this._updateStatus({ faceRunning: true, faceError: null });
+    } catch (e) {
+      this._face.stop();
+      this._updateStatus({ faceRunning: false, faceError: e.message || String(e) });
+    }
+  }
+
+  _onFacePose(pose) {
+    if (!this._store.get(K.enabled, false)) return;
+    if (!this._store.get(K.faceTrackEnabled, false)) return;
+    const p1 = pose?.p1 || {};
+    const p2 = pose?.p2 || {};
+    const next = {
+      yaw: Number(pose?.yaw) || Number(p1.yaw) || 0,
+      pitch: Number(pose?.pitch) || Number(p1.pitch) || 0,
+      tracking: !!(pose?.tracking || p1.tracking || p2.tracking),
+      faceCount: Number(pose?.faceCount) || ((p1.tracking ? 1 : 0) + (p2.tracking ? 1 : 0)),
+      p1: {
+        yaw: Number(p1.yaw) || 0,
+        pitch: Number(p1.pitch) || 0,
+        tracking: !!p1.tracking,
+      },
+      p2: {
+        yaw: Number(p2.yaw) || 0,
+        pitch: Number(p2.pitch) || 0,
+        tracking: !!p2.tracking,
+      },
+    };
+    this._lastPose = next;
+    if (next.tracking && this._status.faceError) {
+      this._updateStatus({ faceError: null });
+    }
+    const now = Date.now();
+    if (!next.tracking || now - this._lastPoseSentAt >= 33) {
+      this._lastPoseSentAt = now;
+      this._broadcast({ type: 'pose', ...next });
+    }
+  }
+
+  /** 設定画面向け: 実写なしのランドマーク点群 */
+  _onFacePreview(preview) {
+    if (!this._face?.isPreviewEnabled?.()) return;
+    if (!this._store.get(K.enabled, false)) return;
+    if (!this._store.get(K.faceTrackEnabled, false)) return;
+    this.emit('face-preview', preview || {});
+  }
+
+  /**
+   * 設定プレビューの送受信を切り替え（配信中は OFF 推奨）
+   * @param {boolean} enabled
+   */
+  setFacePreviewEnabled(enabled) {
+    const on = this._face?.setPreviewEnabled?.(!!enabled) || false;
+    return { success: true, enabled: on };
+  }
+
+  /** 正面を現在の向きとして記憶し直す */
+  recalibrateFace() {
+    if (!this._face?.isRunning()) {
+      return { success: false, error: '顔トラッキングが稼働していません' };
+    }
+    const ok = this._face.recalibrate();
+    return ok
+      ? { success: true }
+      : { success: false, error: '再キャリブレートに失敗しました' };
   }
 
   _clearAudioFlushTimer() {
@@ -372,8 +568,18 @@ class AvatarManager extends EventEmitter {
     this._server = http.createServer((req, res) => {
       const url = (req.url || '').split('?')[0];
 
-      if (url === '/' || url === '/overlay') {
-        staticFileCache.readUtf8(this._htmlPath, (err, data) => {
+      // /overlay-pixi は移行期のブックマーク互換として同じ Pixi 画面を返す。
+      if (url === '/' || url === '/overlay' || url === '/overlay-pixi') {
+        staticFileCache.readUtf8(PIXI_OVERLAY_HTML, (err, data) => {
+          if (err) { res.writeHead(404); res.end('not found'); return; }
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(data);
+        });
+        return;
+      }
+
+      if (url === '/face-capture') {
+        staticFileCache.readUtf8(FACE_CAPTURE_HTML, (err, data) => {
           if (err) { res.writeHead(404); res.end('not found'); return; }
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(data);
@@ -391,6 +597,8 @@ class AvatarManager extends EventEmitter {
       }
 
       if (customCss.tryHandleCustomCssRoutes(url, res, this._store, staticFileCache)) return;
+
+      if (tryServeMediapipe(url, res)) return;
 
       if (serveAvatarOverlayStatic(url, res)) return;
 
@@ -424,6 +632,7 @@ class AvatarManager extends EventEmitter {
       this._clients.add(ws);
       ws.send(JSON.stringify(this._buildOverlayInit()));
       ws.send(JSON.stringify({ type: 'audio', ...this._lastLevels }));
+      ws.send(JSON.stringify({ type: 'pose', ...this._lastPose }));
       ws.on('message', (raw) => {
         try {
           const msg = JSON.parse(String(raw));
@@ -470,15 +679,18 @@ class AvatarManager extends EventEmitter {
     console.log(`[Avatar-HTTP] http://127.0.0.1:${this._port}/overlay`);
     this._updateStatus({ serverRunning: true, error: null });
     await this._syncAudioFromStore();
+    await this._syncFaceFromStore();
     return { success: true };
   }
 
   stopServer() {
     this._audio.stop();
+    this._face.stop();
     if (this._wss) { try { this._wss.close(); } catch (_) { /* */ } this._wss = null; }
     if (this._server) { try { this._server.close(); } catch (_) { /* */ } this._server = null; }
     this._clients.clear();
-    this._updateStatus({ serverRunning: false, audioRunning: false });
+    this._lastPose = this._emptyPose();
+    this._updateStatus({ serverRunning: false, audioRunning: false, faceRunning: false });
   }
 
   async restartAudio() {

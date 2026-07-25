@@ -39,6 +39,13 @@
   const LAYER_LABEL = {
     body: '身体', face: '顔', hair1: '髪1', hair2: '髪2', eyes: '目', mouth: '口', nose: '鼻',
   };
+  /**
+   * カスタム部位へ降格した部位。フィールド自体は残す（親アンカー hair1/hair2/鼻 が
+   * これらの offset・ゆらぎを参照するため）が、既定では折りたたんで見せる。
+   */
+  const DEMOTED = new Set(['nose', 'hair1', 'hair2']);
+  const DEMOTED_NOTE = '髪・鼻はカスタム部位へ移行しました。既存の設定を編集する場合のみ使います。' +
+    '新しく足すときは「カスタム部位」から追加してください（親部位・追従量・揺れを個別に設定できます）。';
 
   const pathKey = (asset) => asset.replace(/-/g, '_');
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
@@ -133,9 +140,11 @@
           numberField(prefix, ln + '_ox', 'オフセット X', { step: 1 }) +
           numberField(prefix, ln + '_oy', 'オフセット Y', { step: 1 }) +
         '</div>' +
-        '<div class="app-field-group">' +
+        '<div class="app-grid-2">' +
           numberField(prefix, ln + '_z', '描画順（z-index）', { step: 1, min: 0, max: 99, value: defZ }) +
+          numberField(prefix, ln + '_lookMul', '追従量（Pixi）', { step: '0.05', min: 0 }) +
         '</div>' +
+        '<div class="app-desc">追従量は空欄だとリグ種別の既定倍率を使います（顔向きパララックス）</div>' +
         sineBlock +
       '</div>'
     );
@@ -153,8 +162,18 @@
     body += '<summary>画像設定</summary>';
     body += '<div class="app-stack-md">';
     for (const [akey, alabel] of ASSETS) {
+      if (DEMOTED.has(akey)) continue;
       body += pathField(prefix, pathKey(akey), alabel);
     }
+    body += '<details class="av-adv-details av-legacy-details">';
+    body += '<summary>髪・鼻（旧レイヤー／互換）</summary>';
+    body += '<div class="app-stack-md">';
+    body += '<div class="app-desc">' + esc(DEMOTED_NOTE) + '</div>';
+    for (const [akey, alabel] of ASSETS) {
+      if (!DEMOTED.has(akey)) continue;
+      body += pathField(prefix, pathKey(akey), alabel);
+    }
+    body += '</div></details>';
     body += '</div></details>';
 
     body += '<details class="av-adv-details">';
@@ -185,8 +204,19 @@
         '</div>',
     });
     for (const ln of LAYERS) {
+      if (DEMOTED.has(ln)) continue;
       body += layerSection(prefix, ln);
     }
+    body += '<details class="av-adv-details av-legacy-details">';
+    body += '<summary>髪・鼻の位置とゆらぎ（旧レイヤー／互換）</summary>';
+    body += '<div class="app-stack-md">';
+    body += '<div class="app-desc">' + esc(DEMOTED_NOTE) +
+      'カスタム部位の親を「髪1／髪2／鼻」にしている場合、ここの数値が追従の基準になります。</div>';
+    for (const ln of LAYERS) {
+      if (!DEMOTED.has(ln)) continue;
+      body += layerSection(prefix, ln);
+    }
+    body += '</div></details>';
     body += fieldRow({
       label: '無音時の透明度（%）',
       desc: '喋っていない・笑っていないときの不透明度。0 で完全に非表示、100 で常に表示',
@@ -216,6 +246,48 @@
       label: '瞳の移動幅（px）',
       control: numberField(prefix, 'pupilOffsetMax', '最大オフセット', { step: 1, min: 1, max: 16, value: 4 }),
     });
+    body += fieldRow({
+      label: 'リグ種別（Pixi）',
+      desc: 'human=部位差のあるパララックス / integrated=一体感寄り（差を抑える）。各レイヤーの「追従量」で上書き可',
+      control:
+        '<md-outlined-select class="full-width" data-f="' + prefix + '_rigType" label="リグ種別">' +
+          '<md-select-option value="human"><div slot="headline">human（部位パララックス）</div></md-select-option>' +
+          '<md-select-option value="integrated"><div slot="headline">integrated（一体感）</div></md-select-option>' +
+        '</md-outlined-select>',
+    });
+    body += fieldRow({
+      label: '顔向きの移動量（Pixi）',
+      desc: 'pose ±1 のときに動かすピクセル量。大きいほど首振りが強く見えます',
+      control:
+        '<div class="app-grid-2">' +
+          numberField(prefix, 'poseYawPx', '左右（yaw）', { step: 1, min: 0, max: 120, value: '42' }) +
+          numberField(prefix, 'posePitchPx', '上下（pitch）', { step: 1, min: 0, max: 120, value: '34' }) +
+        '</div>',
+    });
+    body += fieldRow({
+      label: '髪の揺れ（Pixi・旧レイヤー用）',
+      desc: '強さ=余韻の大きさ / 速さ=追従のキレ / 減衰=収まりの速さ。' +
+        '髪をカスタム部位へ移行した後は、カスタム部位側の「揺れ」設定が使われます',
+      control:
+        '<div class="app-grid-2">' +
+          numberField(prefix, 'hairSpringStrength', 'スプリング強さ', { step: '0.05', min: 0, max: 1, value: '0.55' }) +
+          numberField(prefix, 'hairSpringSpeed', '追従の速さ', { step: '0.05', min: 0, max: 1, value: '0.55' }) +
+          numberField(prefix, 'hairSpringDamp', '減衰', { step: '0.05', min: 0, max: 1, value: '0.55' }) +
+        '</div>',
+    });
+    body += toggleField(prefix, 'faceMaskEnabled', '顔マスク（Pixi）', '目・口・鼻・瞳を face（なければ body）の不透明部分でクリップ（既定OFF。顔 Mesh と同時には使えません）');
+    body += toggleField(prefix, 'faceMeshEnabled', '顔 Mesh（Pixi）', '顔テクスチャを格子変形して首振りの立体感を出す（既定OFF。ON 時は顔マスクは自動で無効。耳が顔 PNG に含まれると耳も歪みます）');
+    body += fieldRow({
+      label: '顔 Mesh の調整（Pixi）',
+      desc: '分割数が多いほど滑らか。強さは歪みの量。「Mesh 時の平行移動」は Mesh ON のとき face／目口の位置パララックスに掛ける係数。耳の歪みが気になるときは左右の強さを下げる',
+      control:
+        '<div class="app-grid-2">' +
+          numberField(prefix, 'faceMeshDivisions', '格子分割', { step: 1, min: 4, max: 16, value: '8' }) +
+          numberField(prefix, 'poseParallaxWhenMesh', 'Mesh時の平行移動', { step: '0.05', min: 0, max: 1, value: '0.35' }) +
+          numberField(prefix, 'meshYawStrength', '左右の強さ', { step: '0.05', min: 0, max: 2, value: '0.55' }) +
+          numberField(prefix, 'meshPitchStrength', '上下の強さ', { step: '0.05', min: 0, max: 2, value: '0.40' }) +
+        '</div>',
+    });
     body += '</div></details>';
 
     body += '<details class="av-adv-details">';
@@ -242,8 +314,16 @@
         const el = row.querySelector('[data-custom-k="' + k + '"]');
         if (!el) return '';
         if (el.tagName === 'MD-SWITCH') return !!el.checked;
+        // md-outlined-select は value が遅延するとき selected オプションから読む
+        if (el.tagName === 'MD-OUTLINED-SELECT') {
+          const v = window.appUI?.readMdFieldValue?.(el) ?? el.value ?? '';
+          if (v) return v;
+          const sel = el.querySelector('md-select-option[selected], md-select-option[aria-selected="true"]');
+          return sel?.value || sel?.getAttribute('value') || '';
+        }
         return window.appUI?.readMdFieldValue?.(el) ?? el.value ?? '';
       };
+      const lookRaw = String(read('look') ?? '').trim();
       layers.push({
         id: row.dataset.customId || ('cl-' + Date.now().toString(36)),
         name: String(read('name') || 'カスタム'),
@@ -253,6 +333,34 @@
         offsetY: Number(read('oy')) || 0,
         scale: Number(read('scale')) || 1,
         zIndex: Number(read('z')) || 45,
+        lookMul: lookRaw === '' ? null : (Number(lookRaw) || 0),
+        springStrength: Number(read('spring')) || 0,
+        springSpeed: Number(read('spring_speed')) || 0.55,
+        springDamp: Number(read('spring_damp')) || 0.55,
+        audioBounce: Number(read('bounce')) || 0,
+        sine: {
+          enabled: !!read('sine_on'),
+          amp: Number(read('sine_amp')) || 0,
+          periodMs: Number(read('sine_period')) || 4000,
+          phase: Number(read('sine_phase')) || 0,
+        },
+        sway: {
+          enabled: !!read('sway_on'),
+          pivotX: Number(read('sway_px')) || 0,
+          pivotY: Number(read('sway_py')) || 0,
+          width: Number(read('sway_width')) || 0,
+          maxAngleDeg: Number(read('sway_angle')) || 6,
+          falloff: (() => {
+            const raw = String(read('sway_falloff') ?? '').trim();
+            if (raw === '') return 1;
+            const n = Number(raw);
+            return Number.isFinite(n) ? n : 1;
+          })(),
+          reach: Number(read('sway_reach')) || 140,
+          periodMs: Number(read('sway_period')) || 3200,
+          follow: Number(read('sway_follow')) || 0,
+          audio: Number(read('sway_audio')) || 0,
+        },
       });
     });
     hidden.value = JSON.stringify(layers);
@@ -260,15 +368,18 @@
 
   function customLayerRow(prefix, layer) {
     const id = layer?.id || ('cl-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5));
+    const parent = CUSTOM_PARENTS.some(([v]) => v === layer?.parentAnchor)
+      ? layer.parentAnchor
+      : 'body';
     const parentOpts = CUSTOM_PARENTS.map(([v, label]) =>
-      '<md-select-option value="' + v + '"' + (layer?.parentAnchor === v ? ' selected' : '') +
+      '<md-select-option value="' + v + '"' + (parent === v ? ' selected' : '') +
       '><div slot="headline">' + esc(label) + '</div></md-select-option>'
     ).join('');
     return (
       '<div class="app-inset-block av-custom-layer-row app-stack-sm" data-custom-row data-custom-id="' + esc(id) + '">' +
         '<div class="app-grid-2">' +
           '<md-outlined-text-field label="名前" data-custom-k="name" value="' + esc(layer?.name || 'カスタム') + '"></md-outlined-text-field>' +
-          '<md-outlined-select label="親部位" data-custom-k="parent">' + parentOpts + '</md-outlined-select>' +
+          '<md-outlined-select label="親部位" data-custom-k="parent" value="' + esc(parent) + '">' + parentOpts + '</md-outlined-select>' +
         '</div>' +
         '<div class="url-row">' +
           '<md-outlined-text-field readonly data-custom-k="path" placeholder="PNG パス..." class="app-grow" value="' + esc(layer?.path || '') + '"></md-outlined-text-field>' +
@@ -280,6 +391,44 @@
           '<md-outlined-text-field type="number" label="拡大率" data-custom-k="scale" step="0.05" min="0.1" max="4" value="' + (layer?.scale ?? 1) + '"></md-outlined-text-field>' +
           '<md-outlined-text-field type="number" label="z-index" data-custom-k="z" value="' + (layer?.zIndex ?? 45) + '"></md-outlined-text-field>' +
         '</div>' +
+        '<div class="app-desc">動き（Pixi）— 追従量は空欄で既定 0.7。遅れ追従は 0 で無効</div>' +
+        '<div class="app-grid-2">' +
+          '<md-outlined-text-field type="number" label="追従量" data-custom-k="look" step="0.05" min="0" value="' + (layer?.lookMul ?? '') + '"></md-outlined-text-field>' +
+          '<md-outlined-text-field type="number" label="声で弾む量" data-custom-k="bounce" step="0.5" min="0" max="40" value="' + (layer?.audioBounce ?? 0) + '"></md-outlined-text-field>' +
+        '</div>' +
+        '<div class="app-grid-2">' +
+          '<md-outlined-text-field type="number" label="遅れ追従の強さ" data-custom-k="spring" step="0.05" min="0" max="1" value="' + (layer?.springStrength ?? 0) + '"></md-outlined-text-field>' +
+          '<md-outlined-text-field type="number" label="遅れ追従の速さ" data-custom-k="spring_speed" step="0.05" min="0" max="1" value="' + (layer?.springSpeed ?? 0.55) + '"></md-outlined-text-field>' +
+          '<md-outlined-text-field type="number" label="遅れ追従の減衰" data-custom-k="spring_damp" step="0.05" min="0" max="1" value="' + (layer?.springDamp ?? 0.55) + '"></md-outlined-text-field>' +
+        '</div>' +
+        '<div class="app-grid-2">' +
+          '<md-outlined-text-field type="number" label="ゆらぎの大きさ" data-custom-k="sine_amp" step="0.1" min="0" value="' + (layer?.sine?.amp ?? 0) + '"></md-outlined-text-field>' +
+          '<md-outlined-text-field type="number" label="ゆらぎの速さ（ms）" data-custom-k="sine_period" step="50" min="0" value="' + (layer?.sine?.periodMs ?? 4000) + '"></md-outlined-text-field>' +
+        '</div>' +
+        '<label class="app-row app-row-compact app-toggle-inline">' +
+          '<span class="app-toggle-name">自動でゆらす</span>' +
+          '<md-switch data-custom-k="sine_on"' + (layer?.sine?.enabled ? ' selected' : '') + ' icons show-only-selected-icon></md-switch>' +
+        '</label>' +
+        '<input type="hidden" data-custom-k="sine_phase" value="' + (layer?.sine?.phase ?? 0) + '" />' +
+        '<div class="app-desc">毛先しなり（Pixi）— OFF なら従来どおり固定表示。中心はオフセットと同じ座標。hud ありプレビューで黄色い線が付着帯</div>' +
+        '<label class="app-row app-row-compact app-toggle-inline">' +
+          '<span class="app-toggle-name">毛先しなり</span>' +
+          '<md-switch data-custom-k="sway_on"' + (layer?.sway?.enabled ? ' selected' : '') + ' icons show-only-selected-icon></md-switch>' +
+        '</label>' +
+        '<div class="app-stack-sm" data-sway-panel' + (layer?.sway?.enabled ? '' : ' hidden') + '>' +
+          '<div class="app-grid-2">' +
+            '<md-outlined-text-field type="number" label="付着帯 中心X" data-custom-k="sway_px" value="' + (layer?.sway?.pivotX ?? 0) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="付着帯 中心Y" data-custom-k="sway_py" value="' + (layer?.sway?.pivotY ?? -40) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="付着帯の幅" data-custom-k="sway_width" step="1" min="0" value="' + (layer?.sway?.width ?? 0) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="最大振れ角（度）" data-custom-k="sway_angle" step="0.5" min="0" max="25" value="' + (layer?.sway?.maxAngleDeg ?? 6) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="しなり" data-custom-k="sway_falloff" step="0.1" min="0" max="2" value="' + (layer?.sway?.falloff ?? 1) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="しなり到達距離" data-custom-k="sway_reach" step="5" min="8" value="' + (layer?.sway?.reach ?? 140) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="周期（ms）" data-custom-k="sway_period" step="50" min="400" value="' + (layer?.sway?.periodMs ?? 3200) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="頭への追従" data-custom-k="sway_follow" step="0.05" min="0" max="1" value="' + (layer?.sway?.follow ?? 0.5) + '"></md-outlined-text-field>' +
+            '<md-outlined-text-field type="number" label="声でしなる量" data-custom-k="sway_audio" step="0.05" min="0" max="2" value="' + (layer?.sway?.audio ?? 0) + '"></md-outlined-text-field>' +
+          '</div>' +
+          '<div class="app-desc">しなり 0=全体が回る / 1=標準 / 2=毛先だけ。幅 0=点支点（リボン）、前髪は幅を広めに</div>' +
+        '</div>' +
         '<md-text-button type="button" data-custom-remove style="--md-text-button-label-text-color: var(--md-sys-color-error);">削除</md-text-button>' +
       '</div>'
     );
@@ -290,6 +439,7 @@
     if (!list) return;
     const arr = Array.isArray(layers) ? layers : [];
     list.innerHTML = arr.map((l) => customLayerRow(prefix, l)).join('');
+    patchAdvSwitches(list);
     syncCustomLayersJson(prefix);
   }
 
@@ -301,6 +451,7 @@
         const list = document.querySelector('[data-custom-layers-list="' + prefix + '"]');
         if (!list) return;
         list.insertAdjacentHTML('beforeend', customLayerRow(prefix, { parentAnchor: 'hair1' }));
+        patchAdvSwitches(list);
         syncCustomLayersJson(prefix);
         return;
       }
@@ -315,6 +466,12 @@
     document.body.addEventListener('change', (e) => {
       const row = e.target.closest('[data-custom-row]');
       if (!row) return;
+      const swaySw = e.target.closest('[data-custom-k="sway_on"]') || (e.target.getAttribute?.('data-custom-k') === 'sway_on' ? e.target : null);
+      if (swaySw || e.target?.getAttribute?.('data-custom-k') === 'sway_on') {
+        const panel = row.querySelector('[data-sway-panel]');
+        const on = !!(e.target.checked ?? e.target.selected);
+        if (panel) panel.hidden = !on;
+      }
       const wrap = row.closest('[data-custom-layers-wrap]');
       if (wrap) syncCustomLayersJson(wrap.getAttribute('data-custom-layers-wrap'));
     });
@@ -420,6 +577,8 @@
 
   function isFieldVisible(el) {
     if (!el || !el.isConnected) return false;
+    // type=hidden は UA で display:none だが、収集対象として常に含める
+    if (el.tagName === 'INPUT' && el.type === 'hidden') return true;
     let node = el;
     while (node && node !== document.body) {
       if (node.hidden) return false;
@@ -434,9 +593,16 @@
   function collectForm(prefix) {
     syncCustomLayersJson(prefix);
     const data = {};
+    const jsonKey = prefix + '_custom_layers_json';
     document.querySelectorAll('[data-f^="' + prefix + '_"]').forEach((el) => {
+      const key = el.getAttribute('data-f');
+      // カスタム部位 JSON は折りたたみ内の hidden でも必ず保存する
+      if (key === jsonKey) {
+        data[key] = el.value ?? '';
+        return;
+      }
       if (!isFieldVisible(el)) return;
-      data[el.getAttribute('data-f')] = readFieldValue(el);
+      data[key] = readFieldValue(el);
     });
     return data;
   }

@@ -62,6 +62,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   "save-avatar-config",
   "get-avatar-status",
   "open-avatar-preview",
+  "recalibrate-avatar-face",
+  "set-avatar-face-preview",
   "open-image-file-dialog",
   "open-dashboard-window",
   "open-settings-window",
@@ -111,6 +113,7 @@ const ALLOWED_RECEIVE_CHANNELS = [
   "avatar-status-changed",  // アバターサーバー・音声キャプチャ状態
   "avatar-config-changed",  // アバターラベル等（ダッシュボード表示同期）
   "avatar-audio-levels",    // マイク音量（設定画面の VU メーター用）
+  "avatar-face-preview",    // 顔トラッキング設定プレビュー（点群・実写なし）
   "navigate-settings-tab",  // 設定ウィンドウのタブ切替
   "focus-suite-layout-panel", // リハーサル → レイアウト設定へフォーカス
   "suite-layout-changed",   // リハーサルドラッグ → 設定フォーム同期
@@ -300,6 +303,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveAvatarConfig: (settings) => ipcRenderer.invoke("save-avatar-config", settings),
   getAvatarStatus: () => ipcRenderer.invoke("get-avatar-status"),
   openAvatarPreview: () => ipcRenderer.invoke("open-avatar-preview"),
+  recalibrateAvatarFace: () => ipcRenderer.invoke("recalibrate-avatar-face"),
+  setAvatarFacePreview: (enabled) => ipcRenderer.invoke("set-avatar-face-preview", !!enabled),
   openImageFileDialog: () => ipcRenderer.invoke("open-image-file-dialog"),
 
   openDashboard: () => ipcRenderer.invoke("open-dashboard-window"),

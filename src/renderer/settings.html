@@ -23,7 +23,7 @@
       </div>
       <div>
         <div class="header-title">StreamONER</div>
-        <div class="header-ver">v1.13.0</div>
+        <div class="header-ver">v1.14.0</div>
       </div>
     </div>
     <md-outlined-button id="btn-open-dashboard" title="配信用ダッシュボードを開く">ダッシュボード</md-outlined-button>
@@ -849,6 +849,57 @@
       </div>
     </div>
 
+    <div class="app-section-title">顔トラッキング（任意・デフォルトOFF）</div>
+    <div class="app-card">
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">顔向きトラッキングを有効化</div>
+          <div class="app-desc">カメラで yaw/pitch を推定してアバターに反映します。検出数は表示モード連動（両方=最大2顔、1人のみ=1顔）です</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="av-face-track" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-field-row">
+        <div>
+          <div class="app-label">左右の割り当てを入れ替え</div>
+          <div class="app-desc">1カメラで2顔検出時、画面左=1人目 / 右=2人目が逆のときに使います</div>
+        </div>
+        <div class="app-toggle-controls">
+          <md-switch id="av-face-assign-swap" icons show-only-selected-icon></md-switch>
+        </div>
+      </div>
+      <div class="app-field app-stack-md">
+        <md-outlined-button type="button" id="av-scan-cameras">
+          カメラをスキャン
+        </md-outlined-button>
+        <md-outlined-select id="av-camera" class="full-width" label="使用カメラ">
+          <md-select-option value=""><div slot="headline">— 既定カメラ —</div></md-select-option>
+        </md-outlined-select>
+        <div class="av-face-preview-toolbar">
+          <md-outlined-button type="button" id="av-face-preview-toggle">
+            プレビューを表示
+          </md-outlined-button>
+          <div class="app-desc" id="av-face-preview-hint">
+            配信中は非表示推奨。表示すると表情・向きの確認用に負荷が増えます（5分で自動OFF）。
+          </div>
+        </div>
+        <div class="av-face-preview-wrap" id="av-face-preview-wrap" hidden aria-label="顔トラッキング プライバシープレビュー">
+          <canvas id="av-face-preview" width="480" height="270"></canvas>
+          <div class="av-face-preview-caption" id="av-face-preview-caption">
+            実写は表示しません。頭の向き・表情と表示名で割り当てを確認できます。
+          </div>
+        </div>
+        <div class="av-face-calib-row">
+          <md-filled-tonal-button type="button" id="av-face-calib">
+            正面を記憶
+          </md-filled-tonal-button>
+          <div class="app-desc">カメラの前で正面を向いて押し、その向きを「正面」として覚えさせます（約0.3秒サンプリング）。</div>
+        </div>
+        <div class="app-desc" id="av-face-status">顔トラッキング: オフ</div>
+      </div>
+    </div>
+
     <div class="app-section-title">レイヤー・動き</div>
     <p class="app-desc section-lead">画像と表示設定を分けて編集できます。</p>
     <md-tabs id="av-adv-tabs">
@@ -902,11 +953,12 @@
           <div class="app-hint obs-suite-hint">
             通常は統合 URL を使用。<a href="#" class="app-inline-link" id="av-go-suite-obs">レイアウトへ</a>
           </div>
-          <div class="app-label">アバター専用 URL（単体配置用・幅・高さは OBS ソース側で指定）</div>
+          <div class="app-label">アバター専用 URL（Pixi・単体配置用）</div>
           <div class="url-row">
             <md-outlined-text-field id="av-obs-url" readonly></md-outlined-text-field>
             <md-outlined-button id="av-copy-url">コピー</md-outlined-button>
           </div>
+          <div class="app-hint">デバッグ HUD を表示する場合は URL の末尾に <code>?hud=1</code> を追加します</div>
         </div>
       </div>
     </details>

@@ -78,7 +78,7 @@ src/
     ├── dashboard.html / dashboard-app.js
     ├── suite-combined-overlay.html   # /suite
     ├── rehearsal-preview.html/js     # /rehearsal（ドラッグ編集）
-    ├── avatar-overlay-runtime.js
+    ├── avatar-pixi-overlay.html / avatar-pixi-runtime.js
     ├── avatar-audio-capture.js
     ├── avatar-settings-bind.js
     └── shared/
@@ -169,7 +169,7 @@ src/
 
 ### 4.3 アバター（PNG レイヤー）
 
-**非採用:** Live2D / pixi / Cubism
+**描画:** PixiJS（`/overlay`）。`/overlay-pixi` は移行期の互換エイリアス。Live2D / Cubism は不採用。
 
 **音声パイプライン:**
 
@@ -177,7 +177,7 @@ src/
 マイク A/B → avatar-audio-capture.js（Analyser）
   → RMS レベル + 母音推定（周波数帯）+ 笑い検出
   → avatar-audio-manager（IPC）
-  → avatar-manager（WS :3003）→ avatar-overlay-runtime.js
+  → avatar-manager（WS :3003）→ avatar-pixi-runtime.js
 ```
 
 **口パク:**
@@ -197,7 +197,7 @@ src/
 
 - 基本: `body`, `face`, `nose`, `hair1`, `hair2`, `eyes`, `mouth`
 - カスタム: `customLayers[]` — `parentAnchor` で基本部位に追従（`avatar-slot-config.js`）
-- 動き: sine ゆらぎ、drag 遅延追従、jiggle（喋り時の口膨らみ）
+- 動き: sine ゆらぎ、drag 遅延追従、jiggle（喋り時の口膨らみ）、顔 Mesh、毛先しなり
 
 **定数:** `shared/avatar-constants.js` と `avatar-slot-config.js` の `DEFAULT_LAYER_Z` を一致させること。
 

@@ -1,0 +1,1350 @@
+'use strict';
+
+/**
+ * Pixi アバターオーバーレイ（P1–P5）
+ * - init / audio / pose WS
+ * - レイヤー PNG、口パク、p1/p2、髪スプリング、rigType
+ * - LookAt / sine / dragLag / カスタム親追従（DOM 相当）
+ * OBS: HUD は既定で非表示。デバッグ時のみ ?hud=1
+ */
+
+const WS_PROTOCOL = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL = `${WS_PROTOCOL}//${location.host}`;
+const SHOW_HUD = /(?:^|[?&])hud=1(?:&|$)/.test(location.search);
+const IS_PREVIEW = /(?:^|[?&])preview=1(?:&|$)/.test(location.search);
+
+const AC = window.AvatarConstants || {};
+const DEFAULT_LAYER_Z = AC.DEFAULT_LAYER_Z || {
+  body: 10, face: 15, hair1: 20, eyes: 30, mouth: 40, nose: 42, hair2: 50,
+};
+const JIGGLE_HOLD_MS = AC.JIGGLE_HOLD_MS ?? 400;
+const DEFAULT_JIGGLE_STRENGTH = AC.DEFAULT_JIGGLE_STRENGTH ?? 0.08;
+const LEVEL_LERP_OPEN = AC.LEVEL_LERP_OPEN ?? 0.38;
+const LEVEL_LERP_CLOSE = AC.LEVEL_LERP_CLOSE ?? 0.14;
+const SLOT_REF_W = AC.SLOT_REF_W ?? 960;
+const SLOT_REF_H = AC.SLOT_REF_H ?? 420;
+const SINE_ROT_PER_AMP = AC.SINE_ROT_PER_AMP ?? 0.006;
+
+const MULTIPLIERS_HUMAN = {
+  body: 0.15,
+  face: 1.0,
+  eyes: 1.05,
+  mouth: 1.0,
+  nose: 1.0,
+  hair1: 0.45,
+  hair2: 0.35,
+  composite: 0.7,
+};
+
+/** 一体型: 部位差を抑えて「一枚絵」寄りに */
+const MULTIPLIERS_INTEGRATED = {
+  body: 0.55,
+  face: 0.85,
+  eyes: 0.9,
+  mouth: 0.85,
+  nose: 0.85,
+  hair1: 0.75,
+  hair2: 0.7,
+  composite: 0.8,
+};
+
+/** face capture / HUD は概ね ±1。スロット設定 poseYawPx / posePitchPx で上書き */
+const DEFAULT_YAW_PX = 42;
+const DEFAULT_PITCH_PX = 34;
+const SLOT_TARGET_H = 280;
+const HAIR_SPRING_DT = 1 / 60;
+/** カスタム部位の追従量の既定（lookMul 未設定時） */
+const CUSTOM_LOOK_MUL = 0.7;
+/** WebGL MAX_TEXTURE_SIZE が 4096 の端末でも載るよう、長い辺を制限 */
+const MAX_TEX_EDGE = 2048;
+
+const FaceMesh = typeof window !== 'undefined' ? window.AvatarFaceMesh : null;
+const SwayMesh = typeof window !== 'undefined' ? window.AvatarSwayMesh : null;
+/** 毛先しなり MeshPlane の格子（8 → 9×9 頂点） */
+const SWAY_MESH_DIVISIONS = 8;
+const SWAY_ANGLE_EPS = 1e-4;
+
+function meshOptsFromCfg(cfg, pxScale) {
+  if (!FaceMesh) return null;
+  return FaceMesh.resolveMeshOpts({
+    faceMeshDivisions: cfg?.faceMeshDivisions,
+    meshYawStrength: cfg?.meshYawStrength,
+    meshPitchStrength: cfg?.meshPitchStrength,
+    poseParallaxWhenMesh: cfg?.poseParallaxWhenMesh,
+    pxScale: pxScale ?? 1,
+  });
+}
+
+/** Sprite と同じ見た目になるよう、テクスチャ中心 pivot の MeshPlane を作る */
+function createFaceMeshPlane(texture, zIndex, divisions, pixiUrl) {
+  if (!texture || !PIXI.MeshPlane) return null;
+  const cells = Math.max(4, Math.min(16, Math.round(Number(divisions) || 8)));
+  const mesh = new PIXI.MeshPlane({
+    texture,
+    verticesX: cells + 1,
+    verticesY: cells + 1,
+  });
+  // 毎フレーム頂点を書くので、テクスチャ差し替えでの自動 rebuild は切る
+  mesh.autoResize = false;
+  const w = texture.width || 1;
+  const h = texture.height || 1;
+  mesh.pivot.set(w / 2, h / 2);
+  mesh.zIndex = zIndex;
+  mesh._pixiUrl = pixiUrl || null;
+  // Sprite.anchor(0.5) 相当。placeSprite / fitSprite が scale を扱う
+  fitSprite(mesh, SLOT_TARGET_H);
+  return mesh;
+}
+
+function captureMeshRest(mesh) {
+  const attr = mesh?.geometry?.getAttribute?.('aPosition');
+  if (!attr?.buffer?.data) return null;
+  const data = attr.buffer.data;
+  return {
+    rest: new Float32Array(data),
+    width: mesh.geometry.width || mesh.texture?.width || 1,
+    height: mesh.geometry.height || mesh.texture?.height || 1,
+    attr,
+  };
+}
+
+function syncMeshDeform(meshState, yaw, pitch, opts) {
+  if (!meshState || !FaceMesh) return;
+  const data = meshState.attr.buffer.data;
+  if (data.length !== meshState.rest.length) {
+    meshState.rest = new Float32Array(data);
+  }
+  FaceMesh.applyMeshPlaneDeform(
+    data,
+    meshState.rest,
+    meshState.width,
+    meshState.height,
+    yaw,
+    pitch,
+    opts,
+  );
+  meshState.attr.buffer.update();
+}
+
+const hud = document.getElementById('hud');
+const yawInput = document.getElementById('yaw');
+const pitchInput = document.getElementById('pitch');
+const yawVal = document.getElementById('yaw-val');
+const pitchVal = document.getElementById('pitch-val');
+const statusEl = document.getElementById('status');
+const faceStatusEl = document.getElementById('face-status');
+
+if (!SHOW_HUD && hud) hud.classList.add('hidden-for-obs');
+
+const pose = { yaw: 0, pitch: 0, tracking: false, fromFace: false, faceCount: 0 };
+const slotPose = {
+  p1: { yaw: 0, pitch: 0, tracking: false },
+  p2: { yaw: 0, pitch: 0, tracking: false },
+};
+/** HUD をユーザーが操作中は face pose で上書きしない */
+let hudManualUntil = 0;
+let faceTrackEnabled = false;
+/** @type {Map<string, import('pixi.js').Texture>} */
+const textureCache = new Map();
+/** @type {import('pixi.js').Application | null} */
+let app = null;
+let displayMode = 'both';
+const slots = { p1: null, p2: null };
+
+function setStatus(text) {
+  if (statusEl) statusEl.textContent = text;
+}
+
+function updateFaceStatusUi() {
+  if (!faceStatusEl) return;
+  if (!faceTrackEnabled) {
+    faceStatusEl.textContent = '顔トラッキング: OFF';
+    faceStatusEl.dataset.state = 'off';
+    return;
+  }
+  if (performance.now() < hudManualUntil) {
+    faceStatusEl.textContent = '顔トラッキング: 手動HUD優先';
+    faceStatusEl.dataset.state = 'manual';
+    return;
+  }
+  if (pose.fromFace && pose.tracking) {
+    const n = pose.faceCount || ((slotPose.p1.tracking ? 1 : 0) + (slotPose.p2.tracking ? 1 : 0));
+    faceStatusEl.textContent =
+      `顔トラッキング: 追従中 (${n}顔)  p1 ${slotPose.p1.yaw.toFixed(2)}/${slotPose.p1.pitch.toFixed(2)}` +
+      (slotPose.p2.tracking ? `  p2 ${slotPose.p2.yaw.toFixed(2)}/${slotPose.p2.pitch.toFixed(2)}` : '');
+    faceStatusEl.dataset.state = 'ok';
+    return;
+  }
+  faceStatusEl.textContent = '顔トラッキング: 顔を検出できていません（カメラ・照明を確認）';
+  faceStatusEl.dataset.state = 'lost';
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function multipliersFor(cfg) {
+  const base = cfg?.rigType === 'integrated' ? MULTIPLIERS_INTEGRATED : MULTIPLIERS_HUMAN;
+  const out = { ...base };
+  const layers = cfg?.layers || {};
+  for (const name of Object.keys(base)) {
+    if (name === 'composite') continue;
+    const raw = layers[name]?.lookMul;
+    if (raw === '' || raw == null) continue;
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) out[name] = n;
+  }
+  return out;
+}
+
+function posePxFor(cfg) {
+  const yaw = Number(cfg?.poseYawPx);
+  const pitch = Number(cfg?.posePitchPx);
+  return {
+    yawPx: Number.isFinite(yaw) ? Math.max(0, Math.min(120, yaw)) : DEFAULT_YAW_PX,
+    pitchPx: Number.isFinite(pitch) ? Math.max(0, Math.min(120, pitch)) : DEFAULT_PITCH_PX,
+  };
+}
+
+function clamp01(n, fallback = 0.55) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.max(0, Math.min(1, v));
+}
+
+function layerXY(cfg, name) {
+  const L = cfg?.layers?.[name];
+  return {
+    x: Number(L?.offsetX) || 0,
+    y: Number(L?.offsetY) || 0,
+    scaleMul: Number(L?.scale) > 0 ? Number(L.scale) : 1,
+    drag: !!L?.drag,
+    sine: L?.sine || null,
+  };
+}
+
+function sineOffset(layer, tMs) {
+  const s = layer?.sine;
+  if (!s || !s.enabled) return { x: 0, y: 0, rot: 0 };
+  const w = (2 * Math.PI * tMs) / (Math.max(800, s.periodMs) || 4000);
+  const p = s.phase || 0;
+  const amp = s.amp || 0;
+  return {
+    x: 0,
+    y: amp * Math.sin(w + p),
+    rot: amp * SINE_ROT_PER_AMP * Math.sin(w + p * 0.7),
+  };
+}
+
+function isAttachChildAnchor(anchor) {
+  return anchor === 'eyes' || anchor === 'mouth' || anchor === 'nose';
+}
+
+function syncHudLabels() {
+  if (yawVal) yawVal.textContent = Number(pose.yaw).toFixed(2);
+  if (pitchVal) pitchVal.textContent = Number(pose.pitch).toFixed(2);
+  if (yawInput && document.activeElement !== yawInput) yawInput.value = String(pose.yaw);
+  if (pitchInput && document.activeElement !== pitchInput) pitchInput.value = String(pose.pitch);
+  updateFaceStatusUi();
+}
+
+function syncPoseFromHud() {
+  const yaw = Number(yawInput?.value) || 0;
+  const pitch = Number(pitchInput?.value) || 0;
+  pose.yaw = yaw;
+  pose.pitch = pitch;
+  pose.fromFace = false;
+  pose.tracking = true;
+  pose.faceCount = 1;
+  slotPose.p1 = { yaw, pitch, tracking: true };
+  slotPose.p2 = { yaw, pitch, tracking: true };
+  hudManualUntil = performance.now() + 2500;
+  syncHudLabels();
+}
+
+function applyFacePose(msg) {
+  if (!faceTrackEnabled) return;
+  if (performance.now() < hudManualUntil) {
+    updateFaceStatusUi();
+    return;
+  }
+  const soften = (prev, nextYaw, nextPitch, tracking) => {
+    if (tracking) {
+      return { yaw: Number(nextYaw) || 0, pitch: Number(nextPitch) || 0, tracking: true };
+    }
+    // ロスト中は正面へ戻す（capture 側でも戻すが、描画側の保険）
+    const yaw = lerp(prev?.yaw || 0, 0, 0.22);
+    const pitch = lerp(prev?.pitch || 0, 0, 0.22);
+    return {
+      yaw: Math.abs(yaw) < 0.008 ? 0 : yaw,
+      pitch: Math.abs(pitch) < 0.008 ? 0 : pitch,
+      tracking: false,
+    };
+  };
+  if (msg.p1 || msg.p2) {
+    slotPose.p1 = soften(slotPose.p1, msg.p1?.yaw, msg.p1?.pitch, !!msg.p1?.tracking);
+    slotPose.p2 = soften(slotPose.p2, msg.p2?.yaw, msg.p2?.pitch, !!msg.p2?.tracking);
+  } else {
+    const one = soften(slotPose.p1, msg.yaw, msg.pitch, !!msg.tracking);
+    slotPose.p1 = { ...one };
+    slotPose.p2 = { ...one };
+  }
+  pose.yaw = slotPose.p1.yaw;
+  pose.pitch = slotPose.p1.pitch;
+  pose.tracking = !!(slotPose.p1.tracking || slotPose.p2.tracking);
+  pose.faceCount = Number(msg.faceCount) || ((slotPose.p1.tracking ? 1 : 0) + (slotPose.p2.tracking ? 1 : 0));
+  pose.fromFace = true;
+  syncHudLabels();
+}
+
+yawInput?.addEventListener('input', syncPoseFromHud);
+pitchInput?.addEventListener('input', syncPoseFromHud);
+syncHudLabels();
+setInterval(updateFaceStatusUi, 500);
+
+function makeSpring() {
+  return { x: 0, y: 0, vx: 0, vy: 0 };
+}
+
+function stepSpring(spring, targetX, targetY, strength, dt, speed = 0.55, dampAmt = 0.55) {
+  const s = clamp01(strength, 0);
+  if (s < 0.01) {
+    spring.x = targetX;
+    spring.y = targetY;
+    spring.vx = 0;
+    spring.vy = 0;
+    return;
+  }
+  const sp = clamp01(speed);
+  const d = clamp01(dampAmt);
+  // 速さ↑でばね定数↑、減衰↑で早く収束
+  const k = 6 + 36 * sp * (0.35 + 0.65 * s);
+  const damp = 3 + 16 * d;
+  const ax = (targetX - spring.x) * k - spring.vx * damp;
+  const ay = (targetY - spring.y) * k - spring.vy * damp;
+  spring.vx += ax * dt;
+  spring.vy += ay * dt;
+  spring.x += spring.vx * dt;
+  spring.y += spring.vy * dt;
+}
+
+function hasAssetUrl(assets, key) {
+  return !!(assets && assets[key]);
+}
+
+function pickMouthUrl(s) {
+  const a = s.assets;
+  if (s.laughing) {
+    return a['mouth-smile'] || a['mouth-open'] || a['mouth-closed'] || null;
+  }
+  if (s.speaking) {
+    const v = s.vowel;
+    if (v && hasAssetUrl(a, `mouth-${v}`)) return a[`mouth-${v}`];
+    return a['mouth-open'] || a['mouth-closed'] || null;
+  }
+  return a['mouth-closed'] || null;
+}
+
+function pickEyesUrl(s, tNow) {
+  const a = s.assets;
+  if (s.laughing) return a['eyes-smile'] || a['eyes-normal'] || null;
+  if (tNow < s.blinkUntil && a['eyes-blink']) return a['eyes-blink'];
+  return a['eyes-normal'] || null;
+}
+
+function pickCompositeUrl(s) {
+  const a = s.assets;
+  if (s.laughing) {
+    return a['mouth-smile'] || a['mouth-open'] || a['mouth-closed'] || a.face || a.body || null;
+  }
+  if (s.speaking) {
+    const v = s.vowel;
+    if (v && hasAssetUrl(a, `mouth-${v}`)) return a[`mouth-${v}`];
+    return a['mouth-open'] || a['mouth-closed'] || a.face || a.body || null;
+  }
+  return a['mouth-closed'] || a.face || a.body || null;
+}
+
+function resolveSilentOpacity(cfg) {
+  if (!cfg) return 1;
+  if (cfg.silentOpacity !== undefined && cfg.silentOpacity !== null && cfg.silentOpacity !== '') {
+    const n = Number(cfg.silentOpacity);
+    if (Number.isFinite(n)) return Math.max(0, Math.min(100, n)) / 100;
+  }
+  return cfg.hideWhenSilent ? 0 : 1;
+}
+
+function layerZ(cfg, name) {
+  const n = Number(cfg?.layers?.[name]?.zIndex);
+  return Number.isFinite(n) ? n : (DEFAULT_LAYER_Z[name] ?? 30);
+}
+
+function slotOffsetPx(cfg, screenW, screenH) {
+  const xPct = Number(cfg?.slotOffsetXPct);
+  const yPct = Number(cfg?.slotOffsetYPct);
+  if (Number.isFinite(xPct) || Number.isFinite(yPct)) {
+    return {
+      ox: ((Number.isFinite(xPct) ? xPct : 0) / 100) * screenW,
+      oy: ((Number.isFinite(yPct) ? yPct : 0) / 100) * screenH,
+    };
+  }
+  return {
+    ox: Number(cfg?.slotOffsetX) || 0,
+    oy: Number(cfg?.slotOffsetY) || 0,
+  };
+}
+
+function naturalBlinkDelayMs(cfg) {
+  const min = (cfg?.blinkMinSec || 3) * 1000;
+  const max = (cfg?.blinkMaxSec || 7) * 1000;
+  if (max <= min) return min;
+  const u = (Math.random() + Math.random()) / 2;
+  return min + u * (max - min);
+}
+
+function makePlaceholder(color, w, h, label) {
+  const root = new PIXI.Container();
+  const g = new PIXI.Graphics();
+  g.roundRect(-w / 2, -h / 2, w, h, 12);
+  g.fill({ color, alpha: 0.9 });
+  root.addChild(g);
+  if (label) {
+    const t = new PIXI.Text({
+      text: label,
+      style: { fill: 0xffffff, fontSize: 16, fontWeight: '600' },
+    });
+    t.anchor.set(0.5);
+    root.addChild(t);
+  }
+  return root;
+}
+
+function makePreviewLabel(text) {
+  const label = new PIXI.Text({
+    text,
+    style: {
+      fill: 0xffffff,
+      fontSize: 16,
+      fontWeight: '600',
+      stroke: { color: 0x111827, width: 4 },
+    },
+  });
+  label.anchor.set(0.5);
+  label.position.set(0, -170);
+  label.zIndex = 10000;
+  label.eventMode = 'none';
+  return label;
+}
+
+async function ensureTexture(url) {
+  if (!url) return null;
+  if (textureCache.has(url)) return textureCache.get(url);
+  try {
+    const img = await loadHtmlImage(url);
+    let source = img;
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    const maxEdge = Math.max(iw, ih);
+    if (maxEdge > MAX_TEX_EDGE) {
+      const scale = MAX_TEX_EDGE / maxEdge;
+      const cw = Math.max(1, Math.round(iw * scale));
+      const ch = Math.max(1, Math.round(ih * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, cw, ch);
+      source = canvas;
+      console.info(`[PixiAvatar] downscaled ${url} ${iw}x${ih} → ${cw}x${ch}`);
+    }
+    const tex = PIXI.Texture.from(source);
+    textureCache.set(url, tex);
+    return tex;
+  } catch (e) {
+    console.warn('[PixiAvatar] texture load failed', url, e);
+    return null;
+  }
+}
+
+function loadHtmlImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`image load failed: ${url}`));
+    img.src = url;
+  });
+}
+
+function fitSprite(sp, maxH, scaleMul = 1) {
+  if (!sp?.texture || !sp.texture.height) return 1;
+  const scale = (maxH / sp.texture.height) * (scaleMul || 1);
+  sp.scale.set(scale);
+  return scale;
+}
+
+function createEmptySlot(id) {
+  const root = new PIXI.Container();
+  root.sortableChildren = true;
+  return {
+    id,
+    root,
+    cfg: null,
+    assets: {},
+    sprites: {},
+    customItems: [],
+    attachGroup: null,
+    maskSprite: null,
+    maskSourceName: null,
+    faceMesh: null,
+    maskMesh: null,
+    useLayers: false,
+    speaking: false,
+    laughing: false,
+    level: 0,
+    smoothLevel: 0,
+    vowel: null,
+    nextBlinkAt: 0,
+    blinkUntil: 0,
+    jiggleHoldUntil: 0,
+    peakJiggle: 1,
+    smoothJiggle: 1,
+    hair1Spring: makeSpring(),
+    hair2Spring: makeSpring(),
+    rigX: 0,
+    rigY: 0,
+    rigRot: 0,
+    attachX: 0,
+    attachY: 0,
+    attachRot: 0,
+    pupilX: 0,
+    pupilY: 0,
+    pupilTargetX: 0,
+    pupilTargetY: 0,
+    pupilNextMoveAt: 0,
+    lastPoseYaw: 0,
+  };
+}
+
+function createSwayBandMarker(opts) {
+  const g = new PIXI.Graphics();
+  redrawSwayBandMarker(g, opts);
+  g.zIndex = 9999;
+  g.eventMode = 'none';
+  return g;
+}
+
+function redrawSwayBandMarker(g, opts) {
+  if (!g?.clear) return;
+  g.clear();
+  const o = opts || {};
+  const half = Math.max(4, (Number(o.pivotWidth) || 0) / 2);
+  // ローカル原点＝付着帯中心（親の position に中心を載せる）
+  g.moveTo(-half, 0);
+  g.lineTo(half, 0);
+  g.stroke({ width: 2, color: 0xfbbf24, alpha: 0.95 });
+  g.circle(0, 0, 3.5);
+  g.fill({ color: 0xfbbf24, alpha: 0.95 });
+}
+
+async function buildCustomLayerDisplay(cl, url) {
+  const z = Number(cl.zIndex) || 45;
+  const wantSway = !!(
+    SwayMesh &&
+    SwayMesh.isSwayEnabled(cl) &&
+    !isAttachChildAnchor(cl.parentAnchor) &&
+    PIXI.MeshPlane
+  );
+  if (wantSway) {
+    const tex = await ensureTexture(url);
+    if (tex) {
+      const mesh = createFaceMeshPlane(tex, z, SWAY_MESH_DIVISIONS, url);
+      if (mesh) {
+        const sc = Number(cl.scale);
+        if (Number.isFinite(sc) && sc > 0) fitSprite(mesh, SLOT_TARGET_H, sc);
+        const swayMesh = captureMeshRest(mesh);
+        const swayOpts = SwayMesh.swayOptsFromCustom(cl);
+        let swayMarker = null;
+        if (SHOW_HUD) {
+          // ルート直下に置き、表示pxで位置合わせ（メッシュのテクスチャ座標と混ざらない）
+          swayMarker = createSwayBandMarker(swayOpts);
+        }
+        return {
+          sp: mesh,
+          swayMesh,
+          swayAngle: SwayMesh.makeAngleSpring(),
+          lastSwayAngle: 0,
+          swayMarker,
+          swayOpts,
+        };
+      }
+    }
+  }
+  const sp = await buildLayerSprite(url, z, null, 0xadb5bd);
+  if (!sp) return null;
+  return {
+    sp,
+    swayMesh: null,
+    swayAngle: null,
+    lastSwayAngle: 0,
+    swayMarker: null,
+    swayOpts: null,
+  };
+}
+
+async function buildLayerSprite(url, z, placeholderLabel, color) {
+  const tex = await ensureTexture(url);
+  if (tex) {
+    const sp = new PIXI.Sprite(tex);
+    sp.anchor.set(0.5);
+    fitSprite(sp, SLOT_TARGET_H);
+    sp.zIndex = z;
+    sp._pixiUrl = url;
+    return sp;
+  }
+  if (!placeholderLabel) return null;
+  const ph = makePlaceholder(color, 120, 80, placeholderLabel);
+  ph.zIndex = z;
+  return ph;
+}
+
+async function rebuildSlot(id, data) {
+  if (!app) return;
+  const prev = slots[id];
+  if (prev?.root) {
+    app.stage.removeChild(prev.root);
+    prev.root.destroy({ children: true });
+  }
+
+  const s = createEmptySlot(id);
+  slots[id] = s;
+  s.cfg = data || {};
+  s.assets = data?.assets || {};
+  s.useLayers = !!data?.useLayers && Object.values(s.assets).some(Boolean);
+  s.nextBlinkAt = performance.now() + naturalBlinkDelayMs(s.cfg);
+
+  const a = s.assets;
+  const cfg = s.cfg;
+
+  if (s.useLayers) {
+    const bodyUrl = a.face ? a.body : null;
+    const faceUrl = a.face || a.body || null;
+    const mouthUrl = a['mouth-closed'] || a['mouth-open'] || null;
+    // レイヤーが1枚も無いときだけプレースホルダ（口だけのオレンジ箱を出さない）
+    const hasCustom = Object.keys(a).some((k) => k.startsWith('custom-') && a[k]);
+    const needFacePh = IS_PREVIEW
+      && !faceUrl && !bodyUrl && !a.hair1 && !a['eyes-normal'] && !hasCustom;
+
+    s.sprites.body = await buildLayerSprite(bodyUrl, layerZ(cfg, 'body'), null, 0x3d5a80);
+    s.sprites.face = await buildLayerSprite(
+      faceUrl,
+      layerZ(cfg, 'face'),
+      needFacePh ? 'face' : null,
+      0x98c1d9,
+    );
+    // 顔 Mesh: 実テクスチャの Sprite を MeshPlane に載せ替え（プレースホルダ Container は対象外）
+    if (
+      cfg.faceMeshEnabled === true &&
+      FaceMesh &&
+      PIXI.MeshPlane &&
+      s.sprites.face?.texture &&
+      s.sprites.face.anchor
+    ) {
+      const z = layerZ(cfg, 'face');
+      const url = s.sprites.face._pixiUrl;
+      const mesh = createFaceMeshPlane(
+        s.sprites.face.texture,
+        z,
+        cfg.faceMeshDivisions,
+        url,
+      );
+      if (mesh) {
+        const lo = layerXY(cfg, 'face');
+        if (lo.scaleMul !== 1) fitSprite(mesh, SLOT_TARGET_H, lo.scaleMul);
+        s.sprites.face.destroy();
+        s.sprites.face = mesh;
+        s.faceMesh = captureMeshRest(mesh);
+      }
+    }
+    s.sprites.hair1 = await buildLayerSprite(a.hair1, layerZ(cfg, 'hair1'), null, 0x293241);
+    s.sprites.hair2 = await buildLayerSprite(a.hair2, layerZ(cfg, 'hair2'), null, 0x1b263b);
+    s.sprites.eyes = await buildLayerSprite(
+      a['eyes-normal'] || a.eyes,
+      layerZ(cfg, 'eyes'),
+      null,
+      0xe0fbfc,
+    );
+    // 口アセット未設定なら作らない（誤って口だけ見えるのを防ぐ）
+    s.sprites.mouth = mouthUrl
+      ? await buildLayerSprite(mouthUrl, layerZ(cfg, 'mouth'), null, 0xee6c4d)
+      : null;
+    s.sprites.nose = await buildLayerSprite(a.nose, layerZ(cfg, 'nose'), null, 0xffb703);
+    s.sprites.pupil = await buildLayerSprite(
+      a['eyes-pupil'],
+      layerZ(cfg, 'eyes') + 1,
+      null,
+      0xffffff,
+    );
+
+    s.attachGroup = new PIXI.Container();
+    s.attachGroup.sortableChildren = true;
+    s.attachGroup.zIndex = Math.max(
+      layerZ(cfg, 'eyes'),
+      layerZ(cfg, 'mouth'),
+      layerZ(cfg, 'nose'),
+    );
+    s.root.addChild(s.attachGroup);
+
+    const maskSource = s.sprites.face || s.sprites.body || null;
+    // オプトイン（既定OFF）。face が輪郭のみ等だと目・口を全消しするため。
+    // Mesh ON 時は目口がマスク輪郭とズレて消えるので、マスクは使わない（Mesh と併用不可）。
+    const useMask = cfg.faceMaskEnabled === true && !s.faceMesh && maskSource;
+
+    for (const [name, sp] of Object.entries(s.sprites)) {
+      if (!sp) continue;
+      const lo = layerXY(cfg, name === 'pupil' ? 'eyes' : name);
+      sp.position.set(lo.x, lo.y);
+      if (sp.texture && lo.scaleMul !== 1) fitSprite(sp, SLOT_TARGET_H, lo.scaleMul);
+      if (name === 'eyes' || name === 'mouth' || name === 'nose' || name === 'pupil') {
+        s.attachGroup.addChild(sp);
+      } else {
+        s.root.addChild(sp);
+      }
+    }
+    if (useMask && maskSource.texture) {
+      // 表示用 Sprite を mask にすると通常描画から外れるため、マスク専用 Sprite を使う。
+      // renderable=false にしないとマスクが上に乗って目・口・動きが見えなくなる。
+      s.maskSourceName = s.sprites.face ? 'face' : 'body';
+      s.maskSprite = new PIXI.Sprite(maskSource.texture);
+      s.maskSprite.anchor.set(0.5);
+      fitSprite(s.maskSprite, SLOT_TARGET_H);
+      s.maskSprite.renderable = false;
+      s.root.addChild(s.maskSprite);
+      s.attachGroup.mask = s.maskSprite;
+    }
+  } else {
+    const url = pickCompositeUrl(s) || a.face || a.body;
+    const placeholder = IS_PREVIEW && !url ? id.toUpperCase() : null;
+    s.sprites.composite = await buildLayerSprite(
+      url,
+      20,
+      placeholder,
+      id === 'p1' ? 0x3d5a80 : 0xee6c4d,
+    );
+    if (s.sprites.composite) s.root.addChild(s.sprites.composite);
+  }
+
+  s.customItems = [];
+  for (const cl of cfg.customLayers || []) {
+    const assetKey = `custom-${cl.id}`;
+    const url = a[assetKey];
+    if (!url) continue;
+    const built = await buildCustomLayerDisplay(cl, url);
+    if (!built?.sp) continue;
+    const sp = built.sp;
+    sp.position.set(Number(cl.offsetX) || 0, Number(cl.offsetY) || 0);
+    const sc = Number(cl.scale);
+    if (Number.isFinite(sc) && sc > 0 && sp.scale && !built.swayMesh) {
+      fitSprite(sp, SLOT_TARGET_H, sc);
+    }
+    s.customItems.push({
+      cfg: cl,
+      sp,
+      assetKey,
+      spring: makeSpring(),
+      springReady: false,
+      swayMesh: built.swayMesh,
+      swayAngle: built.swayAngle,
+      lastSwayAngle: built.lastSwayAngle,
+      swayMarker: built.swayMarker,
+      swayOpts: built.swayOpts,
+    });
+    if (s.attachGroup && isAttachChildAnchor(cl.parentAnchor)) {
+      s.attachGroup.addChild(sp);
+    } else {
+      s.root.addChild(sp);
+    }
+    if (built.swayMarker) s.root.addChild(built.swayMarker);
+  }
+
+  const fx = cfg.flipX ? -1 : 1;
+  const fy = cfg.flipY ? -1 : 1;
+  s.root.scale.set(fx, fy);
+  if (IS_PREVIEW) {
+    const previewLabel = makePreviewLabel(
+      data?.previewLabel || (id === 'p1' ? '配信者A' : '配信者B'),
+    );
+    // ルート反転の影響を打ち消し、ラベル文字は常に正立させる。
+    previewLabel.scale.set(fx, fy);
+    s.root.addChild(previewLabel);
+  }
+
+  app.stage.addChild(s.root);
+  layoutSlots();
+}
+
+function layoutSlots() {
+  if (!app) return;
+  const w = app.screen.width;
+  const h = app.screen.height;
+  const mode = displayMode === 'p1' || displayMode === 'p2' ? displayMode : 'both';
+
+  for (const id of ['p1', 'p2']) {
+    const s = slots[id];
+    if (!s?.root) continue;
+    const off = mode === 'p2' ? id !== 'p2' : mode === 'p1' ? id !== 'p1' : false;
+    s.root.visible = !off;
+    if (off) continue;
+
+    let cx;
+    let cy = h * 0.55;
+    if (mode === 'both') {
+      cx = id === 'p1' ? w * 0.28 : w * 0.72;
+    } else {
+      cx = w * 0.5;
+    }
+    const { ox, oy } = slotOffsetPx(s.cfg, w || SLOT_REF_W, h || SLOT_REF_H);
+    s.root.position.set(cx + ox, cy + oy);
+  }
+}
+
+async function applyInit(msg) {
+  const c = msg.config || {};
+  displayMode = c.displayMode === 'p1' || c.displayMode === 'p2' ? c.displayMode : 'both';
+  faceTrackEnabled = !!c.faceTrackEnabled;
+  if (!faceTrackEnabled) {
+    pose.tracking = false;
+    pose.fromFace = false;
+    pose.yaw = 0;
+    pose.pitch = 0;
+    slotPose.p1 = { yaw: 0, pitch: 0, tracking: false };
+    slotPose.p2 = { yaw: 0, pitch: 0, tracking: false };
+    syncHudLabels();
+  }
+  await rebuildSlot('p1', { ...(c.p1 || {}), previewLabel: c.p1Label || '配信者A' });
+  await rebuildSlot('p2', { ...(c.p2 || {}), previewLabel: c.p2Label || '配信者B' });
+  const n1 = Object.keys(slots.p1?.assets || {}).filter((k) => slots.p1.assets[k]).length;
+  const n2 = Object.keys(slots.p2?.assets || {}).filter((k) => slots.p2.assets[k]).length;
+  const faceHint = faceTrackEnabled ? ' face:on' : '';
+  const loaded = ['face', 'eyes', 'mouth', 'body']
+    .filter((k) => slots.p1?.sprites?.[k]?.texture)
+    .join(',') || 'none';
+  const customs = (slots.p1?.customItems || []).length;
+  setStatus(`WS ok / p1 assets:${n1} sprites:${loaded} customs:${customs} mode:${displayMode}${faceHint}`);
+  updateFaceStatusUi();
+}
+
+function updateAudio(id, speaking, laughing, level, vowel) {
+  const s = slots[id];
+  if (!s) return;
+  const wasVocal = s.speaking || s.laughing;
+  s.speaking = speaking;
+  s.laughing = laughing;
+  const target = level || 0;
+  const prev = s.smoothLevel || 0;
+  s.smoothLevel = lerp(prev, target, target > prev ? LEVEL_LERP_OPEN : LEVEL_LERP_CLOSE);
+  s.level = target;
+  s.vowel = speaking && !laughing ? (vowel || null) : null;
+  if (wasVocal && !(speaking || laughing)) {
+    s.nextBlinkAt = performance.now() + naturalBlinkDelayMs(s.cfg);
+  }
+}
+
+function getJiggleScale(s) {
+  const raw = Number(s.cfg?.jiggleStrength);
+  const strength = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : DEFAULT_JIGGLE_STRENGTH;
+  const instant = 1 + strength * ((s.smoothLevel ?? s.level ?? 0) / 100);
+  const now = performance.now();
+  const vocal = s.speaking || s.laughing;
+  if (vocal) {
+    s.jiggleHoldUntil = now + JIGGLE_HOLD_MS;
+    s.peakJiggle = Math.max(s.peakJiggle || 1, instant);
+  }
+  const inHold = now < (s.jiggleHoldUntil || 0);
+  if (!vocal && !inHold) {
+    s.peakJiggle = 1;
+    s.smoothJiggle = lerp(s.smoothJiggle ?? 1, 1, 0.32);
+    return s.smoothJiggle;
+  }
+  const target = Math.max(s.peakJiggle || 1, vocal ? instant : (s.peakJiggle || 1));
+  s.smoothJiggle = lerp(s.smoothJiggle ?? 1, target, 0.22);
+  return s.smoothJiggle;
+}
+
+async function setSpriteUrl(sp, url) {
+  if (!sp || !url || sp._pixiUrl === url) return;
+  if (!sp.texture || !sp.anchor) return; // placeholder Container はスキップ
+  const tex = await ensureTexture(url);
+  if (!tex) return;
+  sp.texture = tex;
+  sp._pixiUrl = url;
+  fitSprite(sp, SLOT_TARGET_H);
+}
+
+function updateLookAt(s, tNow) {
+  const cfg = s.cfg || {};
+  const pupil = s.sprites.pupil;
+  if (!pupil) return;
+  const max = Number(cfg.pupilOffsetMax) || 4;
+  if (!cfg.lookAtEnabled || !hasAssetUrl(s.assets, 'eyes-pupil')) {
+    pupil.visible = false;
+    return;
+  }
+  pupil.visible = true;
+  if (tNow >= (s.pupilNextMoveAt || 0)) {
+    s.pupilTargetX = (Math.random() * 2 - 1) * max;
+    s.pupilTargetY = (Math.random() * 2 - 1) * max * 0.65;
+    s.pupilNextMoveAt = tNow + 1800 + Math.random() * 3200;
+  }
+  s.pupilX = lerp(s.pupilX || 0, s.pupilTargetX || 0, 0.06);
+  s.pupilY = lerp(s.pupilY || 0, s.pupilTargetY || 0, 0.06);
+}
+
+function getAnchorLocal(s, anchor, tNow, faceS, h1, h2) {
+  const layers = s.cfg?.layers || {};
+  switch (anchor) {
+    case 'rig':
+      return { x: s.rigX, y: s.rigY, rot: s.rigRot, scale: 1 };
+    case 'attach':
+      return { x: s.attachX, y: s.attachY, rot: s.attachRot, scale: 1 };
+    case 'body': {
+      const bodyS = sineOffset(layers.body || {}, tNow);
+      return {
+        x: (layers.body?.offsetX || 0),
+        y: (layers.body?.offsetY || 0) + bodyS.y,
+        rot: bodyS.rot,
+        scale: layers.body?.scale || 1,
+      };
+    }
+    case 'face':
+      return {
+        x: (layers.face?.offsetX || 0),
+        y: (layers.face?.offsetY || 0) + faceS.y,
+        rot: faceS.rot,
+        scale: layers.face?.scale || 1,
+      };
+    case 'hair1':
+      return {
+        x: (layers.hair1?.offsetX || 0),
+        y: (layers.hair1?.offsetY || 0) + h1.y,
+        rot: h1.rot,
+        scale: layers.hair1?.scale || 1,
+      };
+    case 'hair2':
+      return {
+        x: (layers.hair2?.offsetX || 0),
+        y: (layers.hair2?.offsetY || 0) + h2.y,
+        rot: h2.rot,
+        scale: layers.hair2?.scale || 1,
+      };
+    case 'eyes':
+      return {
+        x: (layers.eyes?.offsetX || 0),
+        y: (layers.eyes?.offsetY || 0),
+        rot: 0,
+        scale: layers.eyes?.scale || 1,
+      };
+    case 'mouth':
+      return {
+        x: (layers.mouth?.offsetX || 0),
+        y: (layers.mouth?.offsetY || 0),
+        rot: 0,
+        scale: layers.mouth?.scale || 1,
+      };
+    case 'nose':
+      return {
+        x: (layers.nose?.offsetX || 0),
+        y: (layers.nose?.offsetY || 0) + faceS.y,
+        rot: faceS.rot,
+        scale: layers.nose?.scale || 1,
+      };
+    default:
+      return { x: 0, y: 0, rot: 0, scale: 1 };
+  }
+}
+
+function placeSprite(sp, x, y, rot, baseScaleX, baseScaleY) {
+  if (!sp) return;
+  sp.position.set(x, y);
+  if (typeof rot === 'number') sp.rotation = rot;
+  if (baseScaleX != null && sp.scale) {
+    const sx = Math.sign(sp.scale.x) || 1;
+    const sy = Math.sign(sp.scale.y) || 1;
+    sp.scale.set(sx * Math.abs(baseScaleX), sy * Math.abs(baseScaleY ?? baseScaleX));
+  }
+}
+
+function applySlotVisuals(s, tNow) {
+  if (!s?.root) return;
+  const active = s.speaking || s.laughing;
+  const silent = resolveSilentOpacity(s.cfg);
+  // 設定プレビューでは silentOpacity に関係なく素材とラベルを確認できるようにする。
+  s.root.alpha = IS_PREVIEW ? 1 : (active ? 1 : silent);
+
+  if (tNow >= s.nextBlinkAt && s.assets['eyes-blink'] && !s.speaking && !s.laughing) {
+    s.blinkUntil = tNow + (s.cfg.blinkDurationMs || 130);
+    s.nextBlinkAt = tNow + naturalBlinkDelayMs(s.cfg);
+  }
+
+  const { yawPx, pitchPx } = posePxFor(s.cfg);
+  const poseNow = slotPose[s.id] || slotPose.p1;
+  const ox = poseNow.yaw * yawPx;
+  const oy = poseNow.pitch * pitchPx;
+  const Sp = s.sprites;
+  const mult = multipliersFor(s.cfg);
+  const layers = s.cfg?.layers || {};
+  const meshOn = !!(s.faceMesh && FaceMesh && s.cfg?.faceMeshEnabled);
+  // テクスチャ空間へ書くとき: display_px / scale = tex_px。scale ≈ SLOT_TARGET_H / texH
+  const faceScale = Math.abs(Sp.face?.scale?.y) || (s.faceMesh ? SLOT_TARGET_H / s.faceMesh.height : 1);
+  const meshOptsTex = meshOn ? meshOptsFromCfg(s.cfg, 1 / faceScale) : null;
+  const meshOptsDisp = meshOn ? meshOptsFromCfg(s.cfg, 1) : null;
+  const para = meshOn ? (meshOptsDisp?.poseParallaxWhenMesh ?? 0.35) : 1;
+  const oxFace = ox * para;
+  const oyFace = oy * para;
+
+  if (s.useLayers) {
+    const mouthUrl = pickMouthUrl(s);
+    const eyesUrl = pickEyesUrl(s, tNow);
+    if (Sp.mouth && mouthUrl) setSpriteUrl(Sp.mouth, mouthUrl);
+    if (Sp.eyes && eyesUrl) setSpriteUrl(Sp.eyes, eyesUrl);
+
+    const bodyS = sineOffset(layers.body || {}, tNow);
+    const faceS = sineOffset(layers.face || {}, tNow);
+    const h1S = sineOffset(layers.hair1 || {}, tNow);
+    const h2S = sineOffset(layers.hair2 || {}, tNow);
+
+    s.rigX = lerp(s.rigX, (layers.body?.offsetX || 0), 0.35);
+    s.rigY = lerp(s.rigY, (layers.body?.offsetY || 0) + bodyS.y, 0.35);
+    s.rigRot = lerp(s.rigRot, bodyS.rot, 0.35);
+
+    const dragOn = !!(layers.eyes?.drag || layers.mouth?.drag || layers.nose?.drag);
+    if (dragOn) {
+      const lag = Math.min(0.95, Math.max(0.05, s.cfg.dragLag ?? 0.35));
+      s.attachX = lerp(s.attachX, s.rigX, lag);
+      s.attachY = lerp(s.attachY, s.rigY, lag);
+      s.attachRot = lerp(s.attachRot, s.rigRot, lag);
+    } else {
+      s.attachX = s.rigX;
+      s.attachY = s.rigY;
+      s.attachRot = s.rigRot;
+    }
+
+    updateLookAt(s, tNow);
+
+    const jiggle = getJiggleScale(s);
+    const hairStr = clamp01(s.cfg?.hairSpringStrength);
+    const hairSpeed = clamp01(s.cfg?.hairSpringSpeed);
+    const hairDamp = clamp01(s.cfg?.hairSpringDamp);
+    const audioBounce = ((s.smoothLevel ?? s.level ?? 0) / 100) * (2.2 + hairStr * 3.5);
+
+    const placeRigChild = (sp, name, extraY, extraRot, oxUse = ox, oyUse = oy) => {
+      if (!sp) return;
+      const lo = layerXY(s.cfg, name);
+      const m = mult[name] ?? 1;
+      const bx = Math.abs(sp.scale?.x) || lo.scaleMul;
+      fitSprite(sp, SLOT_TARGET_H, lo.scaleMul);
+      const base = Math.abs(sp.scale.x) || bx;
+      placeSprite(
+        sp,
+        s.rigX + lo.x + oxUse * m,
+        s.rigY + lo.y + (extraY || 0) + oyUse * m,
+        s.rigRot + (extraRot || 0),
+        base,
+        base,
+      );
+    };
+
+    const placeAttachChild = (sp, name, extraY, extraRot, scaleYMul) => {
+      if (!sp) return;
+      const lo = layerXY(s.cfg, name);
+      const m = mult[name] ?? 1;
+      fitSprite(sp, SLOT_TARGET_H, lo.scaleMul);
+      const base = Math.abs(sp.scale.x) || lo.scaleMul;
+      let mx = 0;
+      let my = 0;
+      let sxMul = 1;
+      if (meshOn && meshOptsDisp) {
+        const follow = FaceMesh.attachFollowFromPose(
+          lo.x,
+          lo.y + (extraY || 0),
+          poseNow.yaw,
+          poseNow.pitch,
+          SLOT_TARGET_H * 0.5,
+          meshOptsDisp,
+        );
+        mx = follow.dx;
+        my = follow.dy;
+        sxMul = follow.scaleX;
+      }
+      placeSprite(
+        sp,
+        s.attachX + lo.x + oxFace * m + mx,
+        s.attachY + lo.y + (extraY || 0) + oyFace * m + my,
+        s.attachRot + (extraRot || 0),
+        base * sxMul,
+        base * (scaleYMul || 1),
+      );
+    };
+
+    placeRigChild(Sp.body, 'body', 0, 0);
+    placeRigChild(Sp.face, 'face', faceS.y, faceS.rot, oxFace, oyFace);
+    if (meshOn && meshOptsTex) {
+      syncMeshDeform(s.faceMesh, poseNow.yaw, poseNow.pitch, meshOptsTex);
+    }
+    if (s.maskSprite && s.maskSourceName && !meshOn) {
+      const source = Sp[s.maskSourceName];
+      if (source) {
+        s.maskSprite.position.set(source.position.x, source.position.y);
+        s.maskSprite.scale.set(source.scale.x, source.scale.y);
+        s.maskSprite.rotation = source.rotation;
+      }
+    }
+
+    const h1 = layerXY(s.cfg, 'hair1');
+    const h2 = layerXY(s.cfg, 'hair2');
+    const h1m = mult.hair1 ?? 0.45;
+    const h2m = mult.hair2 ?? 0.35;
+    const t1x = s.rigX + h1.x + ox * h1m;
+    const t1y = s.rigY + h1.y + h1S.y + oy * h1m + audioBounce * 0.55;
+    const t2x = s.rigX + h2.x + ox * h2m;
+    const t2y = s.rigY + h2.y + h2S.y + oy * h2m + audioBounce;
+    stepSpring(s.hair1Spring, t1x, t1y, hairStr, HAIR_SPRING_DT, hairSpeed, hairDamp);
+    stepSpring(s.hair2Spring, t2x, t2y, hairStr * 0.85, HAIR_SPRING_DT, hairSpeed, hairDamp);
+    if (Sp.hair1) {
+      fitSprite(Sp.hair1, SLOT_TARGET_H, h1.scaleMul);
+      const base = Math.abs(Sp.hair1.scale.x) || 1;
+      placeSprite(Sp.hair1, s.hair1Spring.x, s.hair1Spring.y, s.rigRot + h1S.rot, base, base);
+    }
+    if (Sp.hair2) {
+      fitSprite(Sp.hair2, SLOT_TARGET_H, h2.scaleMul);
+      const base = Math.abs(Sp.hair2.scale.x) || 1;
+      placeSprite(Sp.hair2, s.hair2Spring.x, s.hair2Spring.y, s.rigRot + h2S.rot, base, base);
+    }
+
+    placeAttachChild(Sp.eyes, 'eyes', 0, 0, 1);
+    placeAttachChild(Sp.mouth, 'mouth', 0, 0, jiggle);
+    placeAttachChild(Sp.nose, 'nose', faceS.y, faceS.rot, 1);
+
+    if (Sp.pupil && Sp.pupil.visible) {
+      const lo = layerXY(s.cfg, 'eyes');
+      const m = mult.eyes ?? 1;
+      fitSprite(Sp.pupil, SLOT_TARGET_H, lo.scaleMul);
+      const base = Math.abs(Sp.pupil.scale.x) || lo.scaleMul;
+      let mx = 0;
+      let my = 0;
+      let sxMul = 1;
+      if (meshOn && meshOptsDisp) {
+        const follow = FaceMesh.attachFollowFromPose(
+          lo.x + (s.pupilX || 0),
+          lo.y + (s.pupilY || 0),
+          poseNow.yaw,
+          poseNow.pitch,
+          SLOT_TARGET_H * 0.5,
+          meshOptsDisp,
+        );
+        mx = follow.dx;
+        my = follow.dy;
+        sxMul = follow.scaleX;
+      }
+      placeSprite(
+        Sp.pupil,
+        s.attachX + lo.x + (s.pupilX || 0) + oxFace * m + mx,
+        s.attachY + lo.y + (s.pupilY || 0) + oyFace * m + my,
+        s.attachRot,
+        base * sxMul,
+        base,
+      );
+    }
+
+    for (const item of s.customItems || []) {
+      const cl = item.cfg;
+      const parent = getAnchorLocal(s, cl.parentAnchor || 'body', tNow, faceS, h1S, h2S);
+      let baseX = parent.x;
+      let baseY = parent.y;
+      let baseRot = parent.rot;
+      if (isAttachChildAnchor(cl.parentAnchor)) {
+        baseX += s.attachX;
+        baseY += s.attachY;
+        baseRot += s.attachRot;
+      } else if (cl.parentAnchor !== 'attach' && cl.parentAnchor !== 'rig') {
+        baseX += s.rigX;
+        baseY += s.rigY;
+        baseRot += s.rigRot;
+      }
+      const sc = (Number(cl.scale) > 0 ? Number(cl.scale) : 1) * (parent.scale || 1);
+      fitSprite(item.sp, SLOT_TARGET_H, sc);
+      const base = Math.abs(item.sp.scale.x) || sc;
+
+      const lookRaw = Number(cl.lookMul);
+      const look = Number.isFinite(lookRaw) && lookRaw >= 0 ? lookRaw : CUSTOM_LOOK_MUL;
+      const own = sineOffset(cl, tNow);
+      const bounce = ((s.smoothLevel ?? s.level ?? 0) / 100) * (Number(cl.audioBounce) || 0);
+      const lookOx = (isAttachChildAnchor(cl.parentAnchor) || cl.parentAnchor === 'face') ? oxFace : ox;
+      const lookOy = (isAttachChildAnchor(cl.parentAnchor) || cl.parentAnchor === 'face') ? oyFace : oy;
+      let mx = 0;
+      let my = 0;
+      let sxMul = 1;
+      // 親が顔／目口鼻なら Mesh 変位に合わせて「顔に貼り付く」
+      if (meshOn && meshOptsDisp && (isAttachChildAnchor(cl.parentAnchor) || cl.parentAnchor === 'face')) {
+        const follow = FaceMesh.attachFollowFromPose(
+          (Number(cl.offsetX) || 0) + (parent.x || 0),
+          (Number(cl.offsetY) || 0) + (parent.y || 0),
+          poseNow.yaw,
+          poseNow.pitch,
+          SLOT_TARGET_H * 0.5,
+          meshOptsDisp,
+        );
+        mx = follow.dx;
+        my = follow.dy;
+        sxMul = follow.scaleX;
+      }
+      const targetX = baseX + (Number(cl.offsetX) || 0) + lookOx * look + mx;
+      const targetY = baseY + (Number(cl.offsetY) || 0) + lookOy * look + own.y + bounce + my;
+      const rot = baseRot + own.rot;
+
+      const springStr = clamp01(cl.springStrength, 0);
+      let px = targetX;
+      let py = targetY;
+      if (springStr >= 0.01) {
+        if (!item.springReady) {
+          item.spring.x = targetX;
+          item.spring.y = targetY;
+          item.springReady = true;
+        }
+        stepSpring(
+          item.spring,
+          targetX,
+          targetY,
+          springStr,
+          HAIR_SPRING_DT,
+          clamp01(cl.springSpeed),
+          clamp01(cl.springDamp),
+        );
+        px = item.spring.x;
+        py = item.spring.y;
+      } else {
+        item.springReady = false;
+      }
+
+      // 毛先しなり（付着帯メッシュ）。位置決めの上に頂点変形を乗せる
+      if (item.swayMesh && SwayMesh && item.swayAngle) {
+        const yawDelta = poseNow.yaw - (s.lastPoseYaw || 0);
+        const swayOpts = SwayMesh.swayOptsFromCustom(cl);
+        const { angle } = SwayMesh.computeSwayAngle({
+          headYawDelta: yawDelta,
+          audioLevel: s.smoothLevel ?? s.level ?? 0,
+          tMs: tNow,
+          spring: item.swayAngle,
+          opts: swayOpts,
+        });
+        if (Math.abs(angle - (item.lastSwayAngle || 0)) >= SWAY_ANGLE_EPS) {
+          item.lastSwayAngle = angle;
+          const dispScale = Math.abs(item.sp.scale?.y) || 1;
+          SwayMesh.applySwayDeform(
+            item.swayMesh.attr.buffer.data,
+            item.swayMesh.rest,
+            item.swayMesh.width,
+            item.swayMesh.height,
+            { x: swayOpts.pivotX, y: swayOpts.pivotY, width: swayOpts.pivotWidth },
+            angle,
+            swayOpts,
+            dispScale,
+          );
+          item.swayMesh.attr.buffer.update();
+        }
+      }
+
+      placeSprite(item.sp, px, py, rot, base * sxMul, base);
+
+      if (item.swayMarker) {
+        const so = item.swayOpts || (SwayMesh ? SwayMesh.swayOptsFromCustom(cl) : null);
+        item.swayMarker.visible = SHOW_HUD;
+        if (so && SHOW_HUD) {
+          if (item._swayMarkerW !== so.pivotWidth) {
+            redrawSwayBandMarker(item.swayMarker, so);
+            item._swayMarkerW = so.pivotWidth;
+          }
+          item.swayMarker.position.set(px + (so.pivotX || 0), py + (so.pivotY || 0));
+          item.swayMarker.rotation = rot;
+        }
+      }
+    }
+
+    s.lastPoseYaw = poseNow.yaw;
+  } else if (Sp.composite) {
+    const url = pickCompositeUrl(s);
+    if (url) setSpriteUrl(Sp.composite, url);
+    const jiggle = getJiggleScale(s);
+    const m = mult.composite ?? 0.7;
+    fitSprite(Sp.composite, SLOT_TARGET_H, 1);
+    const base = Math.abs(Sp.composite.scale.x) || 1;
+    placeSprite(Sp.composite, ox * m, oy * m, 0, base, base * jiggle);
+  }
+}
+
+function onFrame() {
+  const t = performance.now();
+  try {
+    applySlotVisuals(slots.p1, t);
+    applySlotVisuals(slots.p2, t);
+  } catch (e) {
+    console.error('[PixiAvatar] frame', e);
+  }
+}
+
+function connectWs() {
+  let retryMs = 800;
+  const connect = () => {
+    const ws = new WebSocket(WS_URL);
+    ws.onopen = () => {
+      retryMs = 800;
+      setStatus('WS: connected');
+    };
+    ws.onclose = () => {
+      setStatus('WS: reconnecting…');
+      setTimeout(connect, retryMs);
+      retryMs = Math.min(5000, retryMs * 1.5);
+    };
+    ws.onerror = () => {
+      try { ws.close(); } catch (_) { /* */ }
+    };
+    ws.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch (_) { return; }
+      if (msg.type === 'init') {
+        applyInit(msg).catch((e) => console.error('[PixiAvatar] init', e));
+      } else if (msg.type === 'audio') {
+        updateAudio('p1', !!msg.p1Speaking, !!msg.p1Laughing, Number(msg.p1) || 0, msg.p1Vowel || null);
+        updateAudio('p2', !!msg.p2Speaking, !!msg.p2Laughing, Number(msg.p2) || 0, msg.p2Vowel || null);
+      } else if (msg.type === 'pose') {
+        applyFacePose(msg);
+      }
+    };
+  };
+  connect();
+}
+
+async function main() {
+  if (!window.PIXI) {
+    setStatus('PIXI global missing');
+    return;
+  }
+  const stageEl = document.getElementById('stage');
+  app = new PIXI.Application();
+  await app.init({
+    backgroundAlpha: 0,
+    resizeTo: stageEl,
+    antialias: true,
+    preference: 'webgl',
+  });
+  stageEl.appendChild(app.canvas);
+
+  window.addEventListener('resize', layoutSlots);
+  await rebuildSlot('p1', {});
+  await rebuildSlot('p2', {});
+  app.ticker.add(onFrame);
+  connectWs();
+}
+
+main().catch((e) => {
+  console.error('[PixiAvatar]', e);
+  setStatus(`boot error: ${e.message || e}`);
+});
