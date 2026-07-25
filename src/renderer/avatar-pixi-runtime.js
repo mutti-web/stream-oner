@@ -603,7 +603,8 @@ async function rebuildSlot(id, data) {
 
     const maskSource = s.sprites.face || s.sprites.body || null;
     // オプトイン（既定OFF）。face が輪郭のみ等だと目・口を全消しするため。
-    const useMask = cfg.faceMaskEnabled === true && maskSource;
+    // Mesh ON 時は目口がマスク輪郭とズレて消えるので、マスクは使わない（Mesh と併用不可）。
+    const useMask = cfg.faceMaskEnabled === true && !s.faceMesh && maskSource;
 
     for (const [name, sp] of Object.entries(s.sprites)) {
       if (!sp) continue;
@@ -617,30 +618,15 @@ async function rebuildSlot(id, data) {
       }
     }
     if (useMask && maskSource.texture) {
-      // 表示用 Sprite を mask にすると通常描画から外れるため、マスク専用表示物を使う。
+      // 表示用 Sprite を mask にすると通常描画から外れるため、マスク専用 Sprite を使う。
       // renderable=false にしないとマスクが上に乗って目・口・動きが見えなくなる。
       s.maskSourceName = s.sprites.face ? 'face' : 'body';
-      if (s.faceMesh && s.maskSourceName === 'face' && PIXI.MeshPlane) {
-        s.maskSprite = createFaceMeshPlane(
-          maskSource.texture,
-          0,
-          cfg.faceMeshDivisions,
-          null,
-        );
-        if (s.maskSprite) {
-          s.maskSprite.renderable = false;
-          s.maskMesh = captureMeshRest(s.maskSprite);
-          s.root.addChild(s.maskSprite);
-          s.attachGroup.mask = s.maskSprite;
-        }
-      } else {
-        s.maskSprite = new PIXI.Sprite(maskSource.texture);
-        s.maskSprite.anchor.set(0.5);
-        fitSprite(s.maskSprite, SLOT_TARGET_H);
-        s.maskSprite.renderable = false;
-        s.root.addChild(s.maskSprite);
-        s.attachGroup.mask = s.maskSprite;
-      }
+      s.maskSprite = new PIXI.Sprite(maskSource.texture);
+      s.maskSprite.anchor.set(0.5);
+      fitSprite(s.maskSprite, SLOT_TARGET_H);
+      s.maskSprite.renderable = false;
+      s.root.addChild(s.maskSprite);
+      s.attachGroup.mask = s.maskSprite;
     }
   } else {
     const url = pickCompositeUrl(s) || a.face || a.body;
@@ -977,9 +963,8 @@ function applySlotVisuals(s, tNow) {
     placeRigChild(Sp.face, 'face', faceS.y, faceS.rot, oxFace, oyFace);
     if (meshOn && meshOptsTex) {
       syncMeshDeform(s.faceMesh, poseNow.yaw, poseNow.pitch, meshOptsTex);
-      if (s.maskMesh) syncMeshDeform(s.maskMesh, poseNow.yaw, poseNow.pitch, meshOptsTex);
     }
-    if (s.maskSprite && s.maskSourceName) {
+    if (s.maskSprite && s.maskSourceName && !meshOn) {
       const source = Sp[s.maskSourceName];
       if (source) {
         s.maskSprite.position.set(source.position.x, source.position.y);
@@ -1072,10 +1057,11 @@ function applySlotVisuals(s, tNow) {
       let mx = 0;
       let my = 0;
       let sxMul = 1;
-      if (meshOn && meshOptsDisp && isAttachChildAnchor(cl.parentAnchor)) {
+      // 親が顔／目口鼻なら Mesh 変位に合わせて「顔に貼り付く」
+      if (meshOn && meshOptsDisp && (isAttachChildAnchor(cl.parentAnchor) || cl.parentAnchor === 'face')) {
         const follow = FaceMesh.attachFollowFromPose(
-          Number(cl.offsetX) || 0,
-          Number(cl.offsetY) || 0,
+          (Number(cl.offsetX) || 0) + (parent.x || 0),
+          (Number(cl.offsetY) || 0) + (parent.y || 0),
           poseNow.yaw,
           poseNow.pitch,
           SLOT_TARGET_H * 0.5,

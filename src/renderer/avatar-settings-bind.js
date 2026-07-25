@@ -275,11 +275,11 @@
           numberField(prefix, 'hairSpringDamp', '減衰', { step: '0.05', min: 0, max: 1, value: '0.55' }) +
         '</div>',
     });
-    body += toggleField(prefix, 'faceMaskEnabled', '顔マスク（Pixi）', '目・口・鼻・瞳を face（なければ body）の不透明部分でクリップ（既定OFF。輪郭だけの face だと目口が消えるので注意）');
-    body += toggleField(prefix, 'faceMeshEnabled', '顔 Mesh（Pixi）', '顔テクスチャを格子変形して首振りの立体感を出す（既定OFF。DOM オーバーレイでは無効）');
+    body += toggleField(prefix, 'faceMaskEnabled', '顔マスク（Pixi）', '目・口・鼻・瞳を face（なければ body）の不透明部分でクリップ（既定OFF。顔 Mesh と同時には使えません）');
+    body += toggleField(prefix, 'faceMeshEnabled', '顔 Mesh（Pixi）', '顔テクスチャを格子変形して首振りの立体感を出す（既定OFF。ON 時は顔マスクは自動で無効。耳が顔 PNG に含まれると耳も歪みます）');
     body += fieldRow({
       label: '顔 Mesh の調整（Pixi）',
-      desc: '分割数が多いほど滑らか。強さは歪みの量。「Mesh 時の平行移動」は Mesh ON のとき face／目口の位置パララックスに掛ける係数',
+      desc: '分割数が多いほど滑らか。強さは歪みの量。「Mesh 時の平行移動」は Mesh ON のとき face／目口の位置パララックスに掛ける係数。耳の歪みが気になるときは左右の強さを下げる',
       control:
         '<div class="app-grid-2">' +
           numberField(prefix, 'faceMeshDivisions', '格子分割', { step: 1, min: 4, max: 16, value: '8' }) +
