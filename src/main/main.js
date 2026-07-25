@@ -799,7 +799,15 @@ function createSettingsWindow(opts = {}) {
   settingsWindow.webContents.once('did-finish-load', () => {
     flushSettingsRendererMessages(opts);
   });
-  settingsWindow.on('closed', () => { settingsWindow = null; });
+  const disableFacePreview = () => {
+    try { avatarManager?.setFacePreviewEnabled(false); } catch (_) { /* */ }
+  };
+  settingsWindow.on('hide', disableFacePreview);
+  settingsWindow.on('minimize', disableFacePreview);
+  settingsWindow.on('closed', () => {
+    disableFacePreview();
+    settingsWindow = null;
+  });
 }
 
 function stopRehearsalMockFeed() {
@@ -1750,6 +1758,8 @@ function setupIpcHandlers() {
     avatarManager?.getStatus() ?? { serverRunning: false, audioRunning: false });
   ipcMain.handle('recalibrate-avatar-face', () =>
     avatarManager?.recalibrateFace() ?? { success: false, error: 'AvatarManager 未初期化' });
+  ipcMain.handle('set-avatar-face-preview', (_event, enabled) =>
+    avatarManager?.setFacePreviewEnabled(!!enabled) ?? { success: false, enabled: false });
   ipcMain.handle('open-avatar-preview', () => createAvatarPreviewWindow());
 
   ipcMain.handle('obs-connect', async () => {

@@ -25,6 +25,8 @@ class AvatarFaceManager {
     this._window = null;
     this._config = null;
     this._ipcBound = false;
+    /** 設定プレビュー表示中のみ true */
+    this._previewEnabled = false;
   }
 
   _ensureIpc() {
@@ -71,6 +73,7 @@ class AvatarFaceManager {
     this._config = {
       ...(config || {}),
       ...this._assetUrls(assetBaseUrl),
+      previewEnabled: this._previewEnabled,
     };
 
     if (this._window && !this._window.isDestroyed()) {
@@ -104,12 +107,32 @@ class AvatarFaceManager {
     return true;
   }
 
+  /**
+   * 設定プレビュー ON/OFF。OFF 時は capture 側で重い出力を止め、IPC も送らない。
+   * @param {boolean} enabled
+   */
+  setPreviewEnabled(enabled) {
+    const next = !!enabled;
+    if (this._previewEnabled === next) return this._previewEnabled;
+    this._previewEnabled = next;
+    if (this._config) this._config.previewEnabled = next;
+    if (this._window && !this._window.isDestroyed()) {
+      this._window.webContents.send('avatar-face-preview-mode', next);
+    }
+    return this._previewEnabled;
+  }
+
+  isPreviewEnabled() {
+    return !!this._previewEnabled;
+  }
+
   stop() {
     if (this._window && !this._window.isDestroyed()) {
       this._window.close();
     }
     this._window = null;
     this._config = null;
+    this._previewEnabled = false;
   }
 
   isRunning() {

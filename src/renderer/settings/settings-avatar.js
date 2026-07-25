@@ -128,14 +128,15 @@ function updateFaceTrackStatus(st) {
   const on = !!document.getElementById('av-face-track')?.checked;
   if (!on) {
     el.textContent = '顔トラッキング: オフ';
-    drawFacePreviewIdle();
+    if (facePreviewVisible) setFacePreviewVisible(false, { silent: true });
+    else drawFacePreviewIdle();
     return;
   }
   if (st?.faceError) {
     el.textContent = `顔トラッキング: エラー — ${st.faceError}`;
     return;
   }
-  if (lastFacePreview?.calibrating) {
+  if (facePreviewVisible && lastFacePreview?.calibrating) {
     el.textContent = '顔トラッキング: 正面を記憶中… 正面をキープ';
     return;
   }
@@ -144,6 +145,64 @@ function updateFaceTrackStatus(st) {
 
 /** @type {object|null} */
 let lastFacePreview = null;
+/** 設定プレビュー表示中か（既定 OFF・配信向け） */
+let facePreviewVisible = false;
+/** @type {ReturnType<typeof setTimeout>|null} */
+let facePreviewAutoOffTimer = null;
+const FACE_PREVIEW_AUTO_OFF_MS = 5 * 60 * 1000;
+
+function clearFacePreviewAutoOff() {
+  if (facePreviewAutoOffTimer) {
+    clearTimeout(facePreviewAutoOffTimer);
+    facePreviewAutoOffTimer = null;
+  }
+}
+
+function syncFacePreviewToggleUi() {
+  const btn = document.getElementById('av-face-preview-toggle');
+  const wrap = document.getElementById('av-face-preview-wrap');
+  const hint = document.getElementById('av-face-preview-hint');
+  if (wrap) wrap.hidden = !facePreviewVisible;
+  if (btn) btn.textContent = facePreviewVisible ? 'プレビューを隠す' : 'プレビューを表示';
+  if (hint) {
+    hint.textContent = facePreviewVisible
+      ? 'プレビュー表示中。5分で自動OFF（または「隠す」）。配信中は隠した方が軽いです。'
+      : '配信中は非表示推奨。表示すると表情・向きの確認用に負荷が増えます（5分で自動OFF）。';
+  }
+}
+
+/**
+ * @param {boolean} on
+ * @param {{ silent?: boolean, reason?: string }} [opts]
+ */
+async function setFacePreviewVisible(on, opts = {}) {
+  const next = !!on;
+  clearFacePreviewAutoOff();
+  facePreviewVisible = next;
+  if (!next) lastFacePreview = null;
+  syncFacePreviewToggleUi();
+
+  try {
+    await api.setAvatarFacePreview?.(next);
+  } catch (_) { /* */ }
+
+  if (next) {
+    drawFacePreviewIdle();
+    facePreviewAutoOffTimer = setTimeout(() => {
+      setFacePreviewVisible(false, { reason: 'timeout' });
+    }, FACE_PREVIEW_AUTO_OFF_MS);
+    if (!opts.silent) {
+      showFb('av-fb', 'プレビューを表示しました（5分で自動OFF）。');
+    }
+  } else {
+    drawFacePreviewIdle();
+    if (!opts.silent) {
+      if (opts.reason === 'timeout') {
+        showFb('av-fb', 'プレビューを5分経過のため自動で非表示にしました。');
+      }
+    }
+  }
+}
 
 /** face-capture の PREVIEW_LANDMARK_IDX と同じ並び */
 const PREVIEW_OVAL_LEN = 36;
@@ -390,6 +449,7 @@ function drawFacePreviewIdle() {
 }
 
 function drawFacePreview(preview) {
+  if (!facePreviewVisible) return;
   lastFacePreview = preview || null;
   const canvas = getFacePreviewCanvas();
   if (!canvas) return;
@@ -524,6 +584,9 @@ async function initAvatar() {
   const st = await api.getAvatarStatus().catch(() => ({ serverRunning: false }));
   setAvBadge(st);
   updateFaceTrackStatus(st);
+  facePreviewVisible = false;
+  syncFacePreviewToggleUi();
+  try { await api.setAvatarFacePreview?.(false); } catch (_) { /* */ }
   drawFacePreviewIdle();
   suppressAutoSave--;
   avatarFormsHydrated = true;
@@ -532,12 +595,15 @@ async function initAvatar() {
 function bindAvatarActions() {
   document.getElementById('av-display-mode')?.addEventListener('change', () => {
     applyAvDisplayModeUi();
-    if (lastFacePreview) drawFacePreview(lastFacePreview);
-    else drawFacePreviewIdle();
+    if (facePreviewVisible) {
+      if (lastFacePreview) drawFacePreview(lastFacePreview);
+      else drawFacePreviewIdle();
+    }
     debouncedAvatar();
   });
   const debouncedLabelUi = debounce(updateAvatarLabelUi, 300);
   const refreshFacePreviewLabels = () => {
+    if (!facePreviewVisible) return;
     if (lastFacePreview) drawFacePreview(lastFacePreview);
     else drawFacePreviewIdle();
   };
@@ -567,11 +633,22 @@ function bindAvatarActions() {
 
   document.getElementById('av-face-track')?.addEventListener('change', () => {
     updateFaceTrackStatus();
-    if (!document.getElementById('av-face-track')?.checked) drawFacePreviewIdle();
+    if (!document.getElementById('av-face-track')?.checked) {
+      setFacePreviewVisible(false, { silent: true });
+    }
     debouncedAvatar();
   });
   document.getElementById('av-face-assign-swap')?.addEventListener('change', () => debouncedAvatar());
   document.getElementById('av-camera')?.addEventListener('change', () => debouncedAvatar());
+
+  document.getElementById('av-face-preview-toggle')?.addEventListener('click', async () => {
+    const trackOn = !!document.getElementById('av-face-track')?.checked;
+    if (!facePreviewVisible && !trackOn) {
+      showFb('av-fb', '先に顔トラッキングを ON にしてください。', 'err');
+      return;
+    }
+    await setFacePreviewVisible(!facePreviewVisible);
+  });
 
   document.getElementById('av-face-calib')?.addEventListener('click', async () => {
     const on = !!document.getElementById('av-face-track')?.checked;
@@ -586,6 +663,14 @@ function bindAvatarActions() {
       if (el) el.textContent = '顔トラッキング: 正面を記憶中… 正面をキープ';
     } else {
       showFb('av-fb', '正面の記憶に失敗: ' + (r?.error || '不明'), 'err');
+    }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    clearFacePreviewAutoOff();
+    if (facePreviewVisible) {
+      facePreviewVisible = false;
+      try { api.setAvatarFacePreview?.(false); } catch (_) { /* */ }
     }
   });
 

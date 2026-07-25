@@ -367,6 +367,19 @@
           var(--md-sys-color-surface-container-lowest));
       border: 1px solid var(--md-sys-color-outline-variant);
     }
+    .av-face-preview-wrap[hidden] {
+      display: none !important;
+    }
+    .av-face-preview-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+    }
+    .av-face-preview-toolbar .app-desc {
+      flex: 1 1 200px;
+      margin: 0;
+    }
     .av-face-preview-wrap canvas {
       display: block;
       width: 100%;

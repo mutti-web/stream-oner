@@ -19,6 +19,11 @@ const LOST_FRAMES = 12;
 const CALIB_FRAMES = 10;
 /** 設定プレビュー用ランドマーク送信間隔（ms）。実写は送らない */
 const PREVIEW_EVERY_MS = 80;
+/** 検出推論の最短間隔（≈30fps）。rAF は回すが detect を間引く */
+const DETECT_MIN_MS = 33;
+/** 配信向け: カメラ ideal 解像度（検出には十分） */
+const CAM_W = 480;
+const CAM_H = 360;
 
 /**
  * MediaPipe 顔輪郭＋目・口の代表点（実写なしのマーキング用）。
@@ -38,6 +43,11 @@ const PREVIEW_LANDMARK_IDX = [
 ];
 
 let lastPreviewSentAt = 0;
+let lastDetectAt = 0;
+/** 設定プレビュー表示中のみ true（blendshapes/matrix もこのときだけ有効） */
+let previewEnabled = false;
+/** ensureLandmarker / openCamera 用に保持 */
+let lastAssetConfig = null;
 
 /** @type {import('@mediapipe/tasks-vision').FaceLandmarker | null} */
 let landmarker = null;
@@ -295,6 +305,7 @@ function buildSlotPreview(slot, faceEntry) {
 }
 
 function emitPreview(ranked, leftFace, rightFace) {
+  if (!previewEnabled) return;
   const now = performance.now();
   if (now - lastPreviewSentAt < PREVIEW_EVERY_MS) return;
   lastPreviewSentAt = now;
@@ -336,7 +347,8 @@ function recalibrateSlots() {
 
 async function ensureLandmarker(config) {
   const numFaces = runtimeOpts.numFaces;
-  const key = `${config.visionModuleUrl}|${config.wasmRoot}|${config.modelAssetPath}|n${numFaces}|mx+bs`;
+  const rich = !!previewEnabled;
+  const key = `${config.visionModuleUrl}|${config.wasmRoot}|${config.modelAssetPath}|n${numFaces}|${rich ? 'mx+bs' : 'lite'}`;
   if (landmarker && landmarkerKey === key) return landmarker;
   if (landmarker) {
     try { landmarker.close(); } catch (_) { /* */ }
@@ -354,9 +366,9 @@ async function ensureLandmarker(config) {
     },
     runningMode: 'VIDEO',
     numFaces,
-    // 設定プレビュー用（実写は送らない）: 頭の姿勢行列 + 表情係数
-    outputFacialTransformationMatrixes: true,
-    outputFaceBlendshapes: true,
+    // プレビュー表示中のみ表情・変換行列（配信時の負荷を下げる）
+    outputFacialTransformationMatrixes: rich,
+    outputFaceBlendshapes: rich,
   };
   try {
     landmarker = await FaceLandmarker.createFromOptions(vision, options);
@@ -377,8 +389,8 @@ async function openCamera(deviceId) {
   const constraints = {
     audio: false,
     video: deviceId
-      ? { deviceId: { exact: deviceId }, width: { ideal: 640 }, height: { ideal: 480 } }
-      : { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      ? { deviceId: { exact: deviceId }, width: { ideal: CAM_W }, height: { ideal: CAM_H } }
+      : { facingMode: 'user', width: { ideal: CAM_W }, height: { ideal: CAM_H } },
   };
   try {
     stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -386,7 +398,7 @@ async function openCamera(deviceId) {
     if (deviceId) {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        video: { facingMode: 'user', width: { ideal: CAM_W }, height: { ideal: CAM_H } },
       });
     } else {
       throw err;
@@ -420,15 +432,17 @@ function tick() {
     updateSlot(faceSlots.p1, null);
     updateSlot(faceSlots.p2, null);
     emitPose();
-    emitPreview([], null, null);
     return;
   }
   const now = performance.now();
+  // ≈30fps: 推論を間引く（描画ループ自体は rAF）
+  if (now - lastDetectAt < DETECT_MIN_MS) return;
   if (video.currentTime === lastVideoTime) {
     // フレームが進まない間もロストカウントを進めたい場合はここでも null 更新できるが、
     // 一時停止っぽいスタッターでは誤ロストしやすいのでスキップ
     return;
   }
+  lastDetectAt = now;
   lastVideoTime = video.currentTime;
 
   let result;
@@ -439,13 +453,12 @@ function tick() {
     updateSlot(faceSlots.p1, null);
     updateSlot(faceSlots.p2, null);
     emitPose();
-    emitPreview([], null, null);
     return;
   }
 
   const faces = result?.faceLandmarks || [];
-  const matrices = result?.facialTransformationMatrixes || [];
-  const blends = result?.faceBlendshapes || [];
+  const matrices = previewEnabled ? (result?.facialTransformationMatrixes || []) : [];
+  const blends = previewEnabled ? (result?.faceBlendshapes || []) : [];
   const ranked = faces
     .map((lm, i) => ({
       lm,
@@ -485,7 +498,20 @@ function tick() {
     updateSlot(faceSlots.p2, right?.raw || null);
   }
   emitPose();
-  emitPreview(ranked, leftFace, rightFace);
+  if (previewEnabled) emitPreview(ranked, leftFace, rightFace);
+}
+
+async function applyPreviewMode(enabled) {
+  const next = !!enabled;
+  if (previewEnabled === next) return;
+  previewEnabled = next;
+  if (!lastAssetConfig || !running) return;
+  try {
+    await ensureLandmarker(lastAssetConfig);
+  } catch (err) {
+    console.warn('[avatar-face-capture] preview mode landmarker refresh failed', err);
+    window.avatarFaceAPI?.sendError?.(String(err?.message || err));
+  }
 }
 
 async function applyConfig(config) {
@@ -493,9 +519,14 @@ async function applyConfig(config) {
   faceSlots.p1 = emptySlotState();
   faceSlots.p2 = emptySlotState();
   lastVideoTime = -1;
+  lastDetectAt = 0;
   runtimeOpts = resolveFaceOpts(config);
+  if (typeof config?.previewEnabled === 'boolean') {
+    previewEnabled = config.previewEnabled;
+  }
 
   if (!config || config.enabled === false) {
+    lastAssetConfig = null;
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
       stream = null;
@@ -504,6 +535,7 @@ async function applyConfig(config) {
     return;
   }
 
+  lastAssetConfig = config;
   try {
     await ensureLandmarker(config);
     await openCamera(String(config.cameraDeviceId || '').trim());
@@ -528,6 +560,11 @@ function boot() {
   });
   window.avatarFaceAPI.onRecalibrate?.(() => {
     recalibrateSlots();
+  });
+  window.avatarFaceAPI.onPreviewMode?.((enabled) => {
+    applyPreviewMode(enabled).catch((err) => {
+      window.avatarFaceAPI.sendError(String(err?.message || err));
+    });
   });
 }
 

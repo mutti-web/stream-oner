@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld('avatarFaceAPI', {
     ipcRenderer.on('avatar-face-recalibrate', listener);
     return () => ipcRenderer.removeListener('avatar-face-recalibrate', listener);
   },
+  onPreviewMode: (callback) => {
+    const listener = (_event, enabled) => callback(!!enabled);
+    ipcRenderer.on('avatar-face-preview-mode', listener);
+    return () => ipcRenderer.removeListener('avatar-face-preview-mode', listener);
+  },
   sendPose: (data) => ipcRenderer.send('avatar-face-pose', data),
   sendPreview: (data) => ipcRenderer.send('avatar-face-preview', data),
   sendError: (message) => ipcRenderer.send('avatar-face-error', message),

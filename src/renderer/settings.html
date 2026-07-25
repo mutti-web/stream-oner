@@ -892,7 +892,15 @@
         <md-outlined-select id="av-camera" class="full-width" label="使用カメラ">
           <md-select-option value=""><div slot="headline">— 既定カメラ —</div></md-select-option>
         </md-outlined-select>
-        <div class="av-face-preview-wrap" id="av-face-preview-wrap" aria-label="顔トラッキング プライバシープレビュー">
+        <div class="av-face-preview-toolbar">
+          <md-outlined-button type="button" id="av-face-preview-toggle">
+            プレビューを表示
+          </md-outlined-button>
+          <div class="app-desc" id="av-face-preview-hint">
+            配信中は非表示推奨。表示すると表情・向きの確認用に負荷が増えます（5分で自動OFF）。
+          </div>
+        </div>
+        <div class="av-face-preview-wrap" id="av-face-preview-wrap" hidden aria-label="顔トラッキング プライバシープレビュー">
           <canvas id="av-face-preview" width="480" height="270"></canvas>
           <div class="av-face-preview-caption" id="av-face-preview-caption">
             実写は表示しません。頭の向き・表情と表示名で割り当てを確認できます。

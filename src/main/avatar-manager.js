@@ -444,9 +444,19 @@ class AvatarManager extends EventEmitter {
 
   /** 設定画面向け: 実写なしのランドマーク点群 */
   _onFacePreview(preview) {
+    if (!this._face?.isPreviewEnabled?.()) return;
     if (!this._store.get(K.enabled, false)) return;
     if (!this._store.get(K.faceTrackEnabled, false)) return;
     this.emit('face-preview', preview || {});
+  }
+
+  /**
+   * 設定プレビューの送受信を切り替え（配信中は OFF 推奨）
+   * @param {boolean} enabled
+   */
+  setFacePreviewEnabled(enabled) {
+    const on = this._face?.setPreviewEnabled?.(!!enabled) || false;
+    return { success: true, enabled: on };
   }
 
   /** 正面を現在の向きとして記憶し直す */
