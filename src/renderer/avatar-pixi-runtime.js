@@ -373,6 +373,8 @@ function createEmptySlot(id) {
     sprites: {},
     customItems: [],
     attachGroup: null,
+    maskSprite: null,
+    maskSourceName: null,
     useLayers: false,
     speaking: false,
     laughing: false,
@@ -470,6 +472,11 @@ async function rebuildSlot(id, data) {
 
     s.attachGroup = new PIXI.Container();
     s.attachGroup.sortableChildren = true;
+    s.attachGroup.zIndex = Math.max(
+      layerZ(cfg, 'eyes'),
+      layerZ(cfg, 'mouth'),
+      layerZ(cfg, 'nose'),
+    );
     s.root.addChild(s.attachGroup);
 
     const maskSource = s.sprites.face || s.sprites.body || null;
@@ -487,7 +494,13 @@ async function rebuildSlot(id, data) {
       }
     }
     if (useMask) {
-      s.attachGroup.mask = maskSource;
+      // 表示用 Sprite 自体を mask にすると Pixi が通常描画から除外するため、
+      // 同じ Texture を持つマスク専用 Sprite を別に用意する。
+      s.maskSourceName = s.sprites.face ? 'face' : 'body';
+      s.maskSprite = new PIXI.Sprite(maskSource.texture);
+      s.maskSprite.anchor.set(0.5);
+      s.root.addChild(s.maskSprite);
+      s.attachGroup.mask = s.maskSprite;
     }
   } else {
     const url = pickCompositeUrl(s) || a.face || a.body;
@@ -794,6 +807,14 @@ function applySlotVisuals(s, tNow) {
 
     placeRigChild(Sp.body, 'body', 0, 0);
     placeRigChild(Sp.face, 'face', faceS.y, faceS.rot);
+    if (s.maskSprite && s.maskSourceName) {
+      const source = Sp[s.maskSourceName];
+      if (source) {
+        s.maskSprite.position.copyFrom(source.position);
+        s.maskSprite.scale.copyFrom(source.scale);
+        s.maskSprite.rotation = source.rotation;
+      }
+    }
 
     const h1 = layerXY(s.cfg, 'hair1');
     const h2 = layerXY(s.cfg, 'hair2');
