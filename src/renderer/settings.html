@@ -849,28 +849,12 @@
       </div>
     </div>
 
-    <div class="app-section-title">Pixi オーバーレイ（実験・顔トラッキング対応）</div>
-    <div class="app-card">
-      <div class="app-field app-stack-sm">
-        <div class="app-desc">
-          口パクに加え、顔向き・髪スプリング・LookAt などを使う場合はこちらを OBS ブラウザソースに指定します。
-          現行の DOM 専用 URL（<code>/overlay</code>）はそのまま使えます。
-        </div>
-        <div class="app-label">Pixi URL（OBS 用・HUD 非表示）</div>
-        <div class="url-row">
-          <md-outlined-text-field id="av-obs-url-pixi" readonly class="app-grow"></md-outlined-text-field>
-          <md-outlined-button id="av-copy-url-pixi">コピー</md-outlined-button>
-        </div>
-        <div class="app-hint">顔トラッキングは下の「顔トラッキング」で ON（既定 OFF）。LookAt は各スロットのレイヤー設定から有効化できます。</div>
-      </div>
-    </div>
-
-    <div class="app-section-title">顔トラッキング（Pixi・任意・デフォルトOFF）</div>
+    <div class="app-section-title">顔トラッキング（任意・デフォルトOFF）</div>
     <div class="app-card">
       <div class="app-field app-field-row">
         <div>
           <div class="app-label">顔向きトラッキングを有効化</div>
-          <div class="app-desc">カメラで yaw/pitch を推定し Pixi（/overlay-pixi）に反映。検出数は表示モード連動（両方=最大2顔、1人のみ=1顔）。現行 DOM には影響しません</div>
+          <div class="app-desc">カメラで yaw/pitch を推定してアバターに反映します。検出数は表示モード連動（両方=最大2顔、1人のみ=1顔）です</div>
         </div>
         <div class="app-toggle-controls">
           <md-switch id="av-face-track" icons show-only-selected-icon></md-switch>
@@ -969,12 +953,12 @@
           <div class="app-hint obs-suite-hint">
             通常は統合 URL を使用。<a href="#" class="app-inline-link" id="av-go-suite-obs">レイアウトへ</a>
           </div>
-          <div class="app-label">アバター専用 URL（DOM・単体配置用）</div>
+          <div class="app-label">アバター専用 URL（Pixi・単体配置用）</div>
           <div class="url-row">
             <md-outlined-text-field id="av-obs-url" readonly></md-outlined-text-field>
             <md-outlined-button id="av-copy-url">コピー</md-outlined-button>
           </div>
-          <div class="app-hint">Pixi URL は上の「Pixi オーバーレイ」セクションにあります</div>
+          <div class="app-hint">デバッグ HUD を表示する場合は URL の末尾に <code>?hud=1</code> を追加します</div>
         </div>
       </div>
     </details>

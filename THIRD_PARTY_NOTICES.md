@@ -37,7 +37,7 @@ StreamONER（本ソフトウェア）は MIT ライセンスです。詳細は [
 - **License:** MIT
 - **Copyright:** PixiJS Contributors
 - **Homepage:** https://pixijs.com/
-- **Note:** アバター Pixi 実験（`feature/avatar-pixi` の `/overlay-pixi`）で使用
+- **Note:** アバター描画（`/overlay`、互換エイリアス `/overlay-pixi`）で使用
 
 ### MediaPipe Tasks Vision（`@mediapipe/tasks-vision` / `src/renderer/vendor/mediapipe/`）
 

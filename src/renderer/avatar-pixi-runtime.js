@@ -5,11 +5,13 @@
  * - init / audio / pose WS
  * - レイヤー PNG、口パク、p1/p2、髪スプリング、rigType
  * - LookAt / sine / dragLag / カスタム親追従（DOM 相当）
- * OBS: ?hud=0
+ * OBS: HUD は既定で非表示。デバッグ時のみ ?hud=1
  */
 
-const WS_URL = 'ws://127.0.0.1:3003';
-const SHOW_HUD = !/(?:^|[?&])hud=0(?:&|$)/.test(location.search);
+const WS_PROTOCOL = location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL = `${WS_PROTOCOL}//${location.host}`;
+const SHOW_HUD = /(?:^|[?&])hud=1(?:&|$)/.test(location.search);
+const IS_PREVIEW = /(?:^|[?&])preview=1(?:&|$)/.test(location.search);
 
 const AC = window.AvatarConstants || {};
 const DEFAULT_LAYER_Z = AC.DEFAULT_LAYER_Z || {
@@ -415,6 +417,23 @@ function makePlaceholder(color, w, h, label) {
   return root;
 }
 
+function makePreviewLabel(text) {
+  const label = new PIXI.Text({
+    text,
+    style: {
+      fill: 0xffffff,
+      fontSize: 16,
+      fontWeight: '600',
+      stroke: { color: 0x111827, width: 4 },
+    },
+  });
+  label.anchor.set(0.5);
+  label.position.set(0, -170);
+  label.zIndex = 10000;
+  label.eventMode = 'none';
+  return label;
+}
+
 async function ensureTexture(url) {
   if (!url) return null;
   if (textureCache.has(url)) return textureCache.get(url);
@@ -611,7 +630,8 @@ async function rebuildSlot(id, data) {
     const mouthUrl = a['mouth-closed'] || a['mouth-open'] || null;
     // レイヤーが1枚も無いときだけプレースホルダ（口だけのオレンジ箱を出さない）
     const hasCustom = Object.keys(a).some((k) => k.startsWith('custom-') && a[k]);
-    const needFacePh = !faceUrl && !bodyUrl && !a.hair1 && !a['eyes-normal'] && !hasCustom;
+    const needFacePh = IS_PREVIEW
+      && !faceUrl && !bodyUrl && !a.hair1 && !a['eyes-normal'] && !hasCustom;
 
     s.sprites.body = await buildLayerSprite(bodyUrl, layerZ(cfg, 'body'), null, 0x3d5a80);
     s.sprites.face = await buildLayerSprite(
@@ -702,7 +722,13 @@ async function rebuildSlot(id, data) {
     }
   } else {
     const url = pickCompositeUrl(s) || a.face || a.body;
-    s.sprites.composite = await buildLayerSprite(url, 20, url ? null : id.toUpperCase(), id === 'p1' ? 0x3d5a80 : 0xee6c4d);
+    const placeholder = IS_PREVIEW && !url ? id.toUpperCase() : null;
+    s.sprites.composite = await buildLayerSprite(
+      url,
+      20,
+      placeholder,
+      id === 'p1' ? 0x3d5a80 : 0xee6c4d,
+    );
     if (s.sprites.composite) s.root.addChild(s.sprites.composite);
   }
 
@@ -742,6 +768,14 @@ async function rebuildSlot(id, data) {
   const fx = cfg.flipX ? -1 : 1;
   const fy = cfg.flipY ? -1 : 1;
   s.root.scale.set(fx, fy);
+  if (IS_PREVIEW) {
+    const previewLabel = makePreviewLabel(
+      data?.previewLabel || (id === 'p1' ? '配信者A' : '配信者B'),
+    );
+    // ルート反転の影響を打ち消し、ラベル文字は常に正立させる。
+    previewLabel.scale.set(fx, fy);
+    s.root.addChild(previewLabel);
+  }
 
   app.stage.addChild(s.root);
   layoutSlots();
@@ -785,8 +819,8 @@ async function applyInit(msg) {
     slotPose.p2 = { yaw: 0, pitch: 0, tracking: false };
     syncHudLabels();
   }
-  await rebuildSlot('p1', c.p1 || {});
-  await rebuildSlot('p2', c.p2 || {});
+  await rebuildSlot('p1', { ...(c.p1 || {}), previewLabel: c.p1Label || '配信者A' });
+  await rebuildSlot('p2', { ...(c.p2 || {}), previewLabel: c.p2Label || '配信者B' });
   const n1 = Object.keys(slots.p1?.assets || {}).filter((k) => slots.p1.assets[k]).length;
   const n2 = Object.keys(slots.p2?.assets || {}).filter((k) => slots.p2.assets[k]).length;
   const faceHint = faceTrackEnabled ? ' face:on' : '';
@@ -942,7 +976,8 @@ function applySlotVisuals(s, tNow) {
   if (!s?.root) return;
   const active = s.speaking || s.laughing;
   const silent = resolveSilentOpacity(s.cfg);
-  s.root.alpha = active ? 1 : silent;
+  // 設定プレビューでは silentOpacity に関係なく素材とラベルを確認できるようにする。
+  s.root.alpha = IS_PREVIEW ? 1 : (active ? 1 : silent);
 
   if (tNow >= s.nextBlinkAt && s.assets['eyes-blink'] && !s.speaking && !s.laughing) {
     s.blinkUntil = tNow + (s.cfg.blinkDurationMs || 130);

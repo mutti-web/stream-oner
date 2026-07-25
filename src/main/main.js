@@ -49,7 +49,6 @@ const RehearsalMockFeed = require('./rehearsal-mock-feed');
 const { SessionLogManager } = require('./session-log-manager');
 
 const YT_OVERLAY_HTML     = path.join(__dirname, '../renderer/youtube-overlay.html');
-const AVATAR_OVERLAY_HTML = path.join(__dirname, '../renderer/avatar-overlay.html');
 const AVATAR_PREVIEW_HTML  = path.join(__dirname, '../renderer/avatar-preview.html');
 
 /** OBS オーバーレイポート（settings で上書き可・再起動後に反映） */
@@ -296,7 +295,7 @@ function ensureYtChatStartCoordinator() {
 function ensureAvatarManager() {
   if (!avatarManager) {
     const AvatarManager = lazy.getAvatarManagerClass();
-    avatarManager = new AvatarManager(activePorts.avatar, AVATAR_OVERLAY_HTML, store, AVATAR_PREVIEW_HTML);
+    avatarManager = new AvatarManager(activePorts.avatar, store, AVATAR_PREVIEW_HTML);
     if (!avatarBridgeAttached) {
       setupAvatarBridge();
       avatarBridgeAttached = true;

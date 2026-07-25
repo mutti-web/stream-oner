@@ -562,10 +562,6 @@ async function initAvatar() {
   const swapSw = document.getElementById('av-face-assign-swap');
   if (swapSw) swapSw.checked = !!cfg.faceAssignSwap;
   setMdFieldValue(document.getElementById('av-obs-url'), cfg.obsUrl || 'http://127.0.0.1:3003/overlay');
-  setMdFieldValue(
-    document.getElementById('av-obs-url-pixi'),
-    (cfg.obsUrlPixi || 'http://127.0.0.1:3003/overlay-pixi') + '?hud=0',
-  );
 
   if (window.avatarSettingsUI) {
     window.avatarSettingsUI.ensureBuilt();
@@ -735,10 +731,6 @@ function bindAvatarActions() {
   document.getElementById('av-copy-url').addEventListener('click', () => {
     const url = readMdValue(document.getElementById('av-obs-url'));
     navigator.clipboard?.writeText(url).then(() => showFb('av-fb', 'URL をコピーしました。'));
-  });
-  document.getElementById('av-copy-url-pixi')?.addEventListener('click', () => {
-    const url = readMdValue(document.getElementById('av-obs-url-pixi'));
-    navigator.clipboard?.writeText(url).then(() => showFb('av-fb', 'Pixi URL をコピーしました。'));
   });
   document.getElementById('av-go-suite-obs')?.addEventListener('click', (e) => {
     e.preventDefault();

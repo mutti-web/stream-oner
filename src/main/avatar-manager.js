@@ -27,8 +27,6 @@ const customCss = require('./custom-css');
 const PIXI_OVERLAY_HTML = path.join(RENDERER_DIR, 'avatar-pixi-overlay.html');
 
 const serveAvatarOverlayStatic = createRendererStaticHandler(RENDERER_DIR, {
-  '/avatar-overlay.css': 'avatar-overlay.css',
-  '/avatar-overlay-runtime.js': 'avatar-overlay-runtime.js',
   '/avatar-pixi-runtime.js': 'avatar-pixi-runtime.js',
   '/avatar-face-capture.js': 'avatar-face-capture.js',
   '/vendor/pixi.min.js': 'vendor/pixi.min.js',
@@ -106,10 +104,9 @@ const SLOT_KEYS = [
 const DISPLAY_MODES = new Set(['both', 'p1', 'p2']);
 
 class AvatarManager extends EventEmitter {
-  constructor(port, htmlPath, store, previewHtmlPath) {
+  constructor(port, store, previewHtmlPath) {
     super();
     this._port = port;
-    this._htmlPath = htmlPath;
     this._previewHtmlPath = previewHtmlPath;
     this._store = store;
     this._migrated = false;
@@ -247,8 +244,6 @@ class AvatarManager extends EventEmitter {
       cameraDeviceId: s.get(K.cameraDeviceId, ''),
       faceAssignSwap: s.get(K.faceAssignSwap, false),
       obsUrl: `${base}/overlay`,
-      /** Pixi 実験用（現行 DOM とは別 URL。OBS では ?hud=0） */
-      obsUrlPixi: `${base}/overlay-pixi`,
       previewUrl: `${base}/preview`,
       wsUrl: `ws://127.0.0.1:${this._port}`,
       ...slotCfg.slotToFormFlat('p1', this.getSlot('p1')),
@@ -573,16 +568,8 @@ class AvatarManager extends EventEmitter {
     this._server = http.createServer((req, res) => {
       const url = (req.url || '').split('?')[0];
 
-      if (url === '/' || url === '/overlay') {
-        staticFileCache.readUtf8(this._htmlPath, (err, data) => {
-          if (err) { res.writeHead(404); res.end('not found'); return; }
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(data);
-        });
-        return;
-      }
-
-      if (url === '/overlay-pixi') {
+      // /overlay-pixi は移行期のブックマーク互換として同じ Pixi 画面を返す。
+      if (url === '/' || url === '/overlay' || url === '/overlay-pixi') {
         staticFileCache.readUtf8(PIXI_OVERLAY_HTML, (err, data) => {
           if (err) { res.writeHead(404); res.end('not found'); return; }
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
