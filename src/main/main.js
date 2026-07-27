@@ -801,8 +801,23 @@ function createSettingsWindow(opts = {}) {
   const disableFacePreview = () => {
     try { avatarManager?.setFacePreviewEnabled(false); } catch (_) { /* */ }
   };
-  settingsWindow.on('hide', disableFacePreview);
-  settingsWindow.on('minimize', disableFacePreview);
+  const syncFacePreview = (reason) => {
+    disableFacePreview();
+    try {
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send('avatar-face-preview-sync', { reason });
+      }
+    } catch (_) { /* */ }
+  };
+  settingsWindow.on('hide', () => syncFacePreview('window-hidden'));
+  settingsWindow.on('minimize', () => syncFacePreview('window-minimized'));
+  settingsWindow.on('show', () => {
+    try {
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        settingsWindow.webContents.send('avatar-face-preview-sync', { reason: 'window-shown' });
+      }
+    } catch (_) { /* */ }
+  });
   settingsWindow.on('closed', () => {
     disableFacePreview();
     settingsWindow = null;

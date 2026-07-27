@@ -114,6 +114,7 @@ const ALLOWED_RECEIVE_CHANNELS = [
   "avatar-config-changed",  // アバターラベル等（ダッシュボード表示同期）
   "avatar-audio-levels",    // マイク音量（設定画面の VU メーター用）
   "avatar-face-preview",    // 顔トラッキング設定プレビュー（点群・実写なし）
+  "avatar-face-preview-sync", // 設定ウィンドウ hide/show とプレビュー状態の同期
   "navigate-settings-tab",  // 設定ウィンドウのタブ切替
   "focus-suite-layout-panel", // リハーサル → レイアウト設定へフォーカス
   "suite-layout-changed",   // リハーサルドラッグ → 設定フォーム同期

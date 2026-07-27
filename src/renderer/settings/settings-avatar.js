@@ -147,6 +147,8 @@ function updateFaceTrackStatus(st) {
 let lastFacePreview = null;
 /** 設定プレビュー表示中か（既定 OFF・配信向け） */
 let facePreviewVisible = false;
+/** 設定ウィンドウ hide/minimize で capture 側だけ止めたとき（UI の表示意図は保持） */
+let facePreviewPausedByWindow = false;
 /** @type {ReturnType<typeof setTimeout>|null} */
 let facePreviewAutoOffTimer = null;
 const FACE_PREVIEW_AUTO_OFF_MS = 5 * 60 * 1000;
@@ -179,6 +181,7 @@ async function setFacePreviewVisible(on, opts = {}) {
   const next = !!on;
   clearFacePreviewAutoOff();
   facePreviewVisible = next;
+  facePreviewPausedByWindow = false;
   if (!next) lastFacePreview = null;
   syncFacePreviewToggleUi();
 
@@ -201,6 +204,28 @@ async function setFacePreviewVisible(on, opts = {}) {
         showFb('av-fb', 'プレビューを5分経過のため自動で非表示にしました。');
       }
     }
+  }
+}
+
+/**
+ * 設定ウィンドウ hide/show と capture プレビューのずれを解消する。
+ * hide 時 main は capture だけ止めるため、UI を一時停止表示にし、show で再開する。
+ * @param {{ reason?: string }} [msg]
+ */
+function onFacePreviewWindowSync(msg) {
+  const reason = msg?.reason || '';
+  if (reason === 'window-hidden' || reason === 'window-minimized') {
+    if (!facePreviewVisible) return;
+    facePreviewPausedByWindow = true;
+    drawFacePreviewPaused();
+    return;
+  }
+  if (reason === 'window-shown') {
+    if (!facePreviewVisible) return;
+    facePreviewPausedByWindow = false;
+    api.setAvatarFacePreview?.(true).catch(() => { /* */ });
+    if (lastFacePreview) drawFacePreview(lastFacePreview);
+    else drawFacePreviewIdle();
   }
 }
 
@@ -446,10 +471,38 @@ function drawFacePreviewIdle() {
   ctx.font = '12px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('トラッキング OFF / 待機', w / 2, h - 14);
+  const cap = document.getElementById('av-face-preview-caption');
+  if (cap) cap.textContent = 'プレビュー待機中。';
+}
+
+/** ウィンドウ非表示中の一時停止表示（古いフレームを「生きている」と誤認させない） */
+function drawFacePreviewPaused() {
+  const canvas = getFacePreviewCanvas();
+  if (!canvas || !facePreviewVisible) return;
+  if (lastFacePreview) {
+    // 下地として最後のフレームを描き、上に一時停止オーバーレイ
+    facePreviewPausedByWindow = false;
+    drawFacePreview(lastFacePreview);
+    facePreviewPausedByWindow = true;
+  } else {
+    drawFacePreviewIdle();
+  }
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(248, 250, 252, 0.95)';
+  ctx.font = '13px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('設定ウィンドウ非表示のため一時停止', w / 2, h / 2);
+  const cap = document.getElementById('av-face-preview-caption');
+  if (cap) cap.textContent = 'ウィンドウを表示するとプレビューが再開します。';
 }
 
 function drawFacePreview(preview) {
-  if (!facePreviewVisible) return;
+  if (!facePreviewVisible || facePreviewPausedByWindow) return;
   lastFacePreview = preview || null;
   const canvas = getFacePreviewCanvas();
   if (!canvas) return;
@@ -581,6 +634,7 @@ async function initAvatar() {
   setAvBadge(st);
   updateFaceTrackStatus(st);
   facePreviewVisible = false;
+  facePreviewPausedByWindow = false;
   syncFacePreviewToggleUi();
   try { await api.setAvatarFacePreview?.(false); } catch (_) { /* */ }
   drawFacePreviewIdle();
@@ -657,6 +711,16 @@ function bindAvatarActions() {
       showFb('av-fb', '正面の記憶を開始しました。正面をキープしてください。');
       const el = document.getElementById('av-face-status');
       if (el) el.textContent = '顔トラッキング: 正面を記憶中… 正面をキープ';
+      // プレビュー表示中なら「記憶中」を即描画（次フレーム待ちで旧表示が残るのを防ぐ）
+      if (facePreviewVisible && !facePreviewPausedByWindow) {
+        drawFacePreview({
+          ...(lastFacePreview || {}),
+          tracking: true,
+          calibrating: true,
+          p1: lastFacePreview?.p1 || {},
+          p2: lastFacePreview?.p2 || {},
+        });
+      }
     } else {
       showFb('av-fb', '正面の記憶に失敗: ' + (r?.error || '不明'), 'err');
     }

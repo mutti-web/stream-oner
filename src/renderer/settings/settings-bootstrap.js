@@ -24,6 +24,9 @@ api.on('avatar-audio-levels', updateAvVuMeters);
 api.on('avatar-face-preview', (preview) => {
   if (typeof drawFacePreview === 'function') drawFacePreview(preview);
 });
+api.on('avatar-face-preview-sync', (msg) => {
+  if (typeof onFacePreviewWindowSync === 'function') onFacePreviewWindowSync(msg);
+});
 api.on('click-through-changed', v => { document.getElementById('click-through').checked = v; });
 api.on('position-lock-changed', v => { document.getElementById('pos-lock').checked = v; });
 api.on('suite-features-changed', (f) => { if (f) onSuiteFeaturesChangedRemote(f); });

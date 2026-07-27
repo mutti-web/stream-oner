@@ -48,6 +48,8 @@ let lastDetectAt = 0;
 let previewEnabled = false;
 /** ensureLandmarker / openCamera 用に保持 */
 let lastAssetConfig = null;
+/** Landmarker 差し替え中は detect を止める（閉じたインスタンスへの触りを防ぐ） */
+let landmarkerRefreshing = false;
 
 /** @type {import('@mediapipe/tasks-vision').FaceLandmarker | null} */
 let landmarker = null;
@@ -304,10 +306,10 @@ function buildSlotPreview(slot, faceEntry) {
   return base;
 }
 
-function emitPreview(ranked, leftFace, rightFace) {
+function emitPreview(ranked, leftFace, rightFace, opts = {}) {
   if (!previewEnabled) return;
   const now = performance.now();
-  if (now - lastPreviewSentAt < PREVIEW_EVERY_MS) return;
+  if (!opts.force && now - lastPreviewSentAt < PREVIEW_EVERY_MS) return;
   lastPreviewSentAt = now;
   const mode = runtimeOpts.displayMode;
   const p1 = faceSlots.p1;
@@ -315,21 +317,24 @@ function emitPreview(ranked, leftFace, rightFace) {
   let p1Prev;
   let p2Prev;
   if (mode === 'p1') {
-    p1Prev = buildSlotPreview(p1, ranked[0] || null);
+    p1Prev = buildSlotPreview(p1, ranked?.[0] || null);
     p2Prev = buildSlotPreview(p2, null);
   } else if (mode === 'p2') {
     p1Prev = buildSlotPreview(p1, null);
-    p2Prev = buildSlotPreview(p2, ranked[0] || null);
+    p2Prev = buildSlotPreview(p2, ranked?.[0] || null);
   } else {
-    p1Prev = buildSlotPreview(p1, leftFace);
-    p2Prev = buildSlotPreview(p2, rightFace);
+    p1Prev = buildSlotPreview(p1, leftFace || null);
+    p2Prev = buildSlotPreview(p2, rightFace || null);
   }
-  window.avatarFaceAPI?.sendPreview?.({
-    tracking: p1.tracking || p2.tracking,
-    calibrating: !!(
+  const calibrating = opts.calibrating != null
+    ? !!opts.calibrating
+    : !!(
       (p1.tracking && !p1.calib && (p1.calibSamples?.length || 0) > 0) ||
       (p2.tracking && !p2.calib && (p2.calibSamples?.length || 0) > 0)
-    ),
+    );
+  window.avatarFaceAPI?.sendPreview?.({
+    tracking: p1.tracking || p2.tracking,
+    calibrating,
     p1: p1Prev,
     p2: p2Prev,
   });
@@ -343,6 +348,10 @@ function recalibrateSlots() {
     slot.lost = 0;
     // 現在値はそのまま。次の検出で正面サンプルを取り直す
   }
+  // プレビュー ON なら「記憶中」を即反映（次フレーム待ちで旧表示が残らないように）
+  if (previewEnabled) {
+    emitPreview([], null, null, { force: true, calibrating: true });
+  }
 }
 
 async function ensureLandmarker(config) {
@@ -350,35 +359,41 @@ async function ensureLandmarker(config) {
   const rich = !!previewEnabled;
   const key = `${config.visionModuleUrl}|${config.wasmRoot}|${config.modelAssetPath}|n${numFaces}|${rich ? 'mx+bs' : 'lite'}`;
   if (landmarker && landmarkerKey === key) return landmarker;
-  if (landmarker) {
-    try { landmarker.close(); } catch (_) { /* */ }
-    landmarker = null;
-    landmarkerKey = '';
-  }
 
-  const mod = await import(config.visionModuleUrl);
-  const { FaceLandmarker, FilesetResolver } = mod;
-  const vision = await FilesetResolver.forVisionTasks(config.wasmRoot);
-  const options = {
-    baseOptions: {
-      modelAssetPath: config.modelAssetPath,
-      delegate: 'GPU',
-    },
-    runningMode: 'VIDEO',
-    numFaces,
-    // プレビュー表示中のみ表情・変換行列（配信時の負荷を下げる）
-    outputFacialTransformationMatrixes: rich,
-    outputFaceBlendshapes: rich,
-  };
+  landmarkerRefreshing = true;
   try {
-    landmarker = await FaceLandmarker.createFromOptions(vision, options);
-  } catch (gpuErr) {
-    console.warn('[avatar-face-capture] GPU failed, fallback CPU', gpuErr);
-    options.baseOptions.delegate = 'CPU';
-    landmarker = await FaceLandmarker.createFromOptions(vision, options);
+    if (landmarker) {
+      try { landmarker.close(); } catch (_) { /* */ }
+      landmarker = null;
+      landmarkerKey = '';
+    }
+
+    const mod = await import(config.visionModuleUrl);
+    const { FaceLandmarker, FilesetResolver } = mod;
+    const vision = await FilesetResolver.forVisionTasks(config.wasmRoot);
+    const options = {
+      baseOptions: {
+        modelAssetPath: config.modelAssetPath,
+        delegate: 'GPU',
+      },
+      runningMode: 'VIDEO',
+      numFaces,
+      // プレビュー表示中のみ表情・変換行列（配信時の負荷を下げる）
+      outputFacialTransformationMatrixes: rich,
+      outputFaceBlendshapes: rich,
+    };
+    try {
+      landmarker = await FaceLandmarker.createFromOptions(vision, options);
+    } catch (gpuErr) {
+      console.warn('[avatar-face-capture] GPU failed, fallback CPU', gpuErr);
+      options.baseOptions.delegate = 'CPU';
+      landmarker = await FaceLandmarker.createFromOptions(vision, options);
+    }
+    landmarkerKey = key;
+    return landmarker;
+  } finally {
+    landmarkerRefreshing = false;
   }
-  landmarkerKey = key;
-  return landmarker;
 }
 
 async function openCamera(deviceId) {
@@ -424,8 +439,11 @@ function stopLoop() {
 }
 
 function tick() {
-  if (!running || !landmarker || !video) return;
+  // running 中は必ず次フレームを予約する。Landmarker 差し替え中に return すると
+  // ループが止まり、プレビュー ON 後も IPC が来ない原因になる。
+  if (!running) return;
   rafId = requestAnimationFrame(tick);
+  if (!landmarker || !video || landmarkerRefreshing) return;
 
   // カメラ切断・未準備でもロスト扱いにして正面へ戻す
   if (video.readyState < 2 || (stream && stream.getTracks().every((t) => t.readyState !== 'live'))) {
