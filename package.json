@@ -28,7 +28,7 @@
     "@material/web": "^2.4.1",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^1.0.0",
-    "electron": "^28.0.0",
+    "electron": "^39.8.5",
     "electron-builder": "^24.0.0",
     "rollup": "^4.60.4"
   },
