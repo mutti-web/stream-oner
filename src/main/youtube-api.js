@@ -41,6 +41,7 @@ function extractInnertubeApiKeyFromHtml(html) {
  *
  * - 既定 (auto): ユーザー／同梱の Data API キーがあれば Data API v3
  * - キーなし: watch ページから実行時取得したキーで InnerTube（ソースにキーを埋め込まない）
+ * - InnerTube ポーリング失敗時: watch ページからキー／continuation を再取得してリトライ
  * - InnerTube 失敗時: キーがあれば Data API へフォールバック
  */
 class YouTubeChatPoller {
@@ -143,7 +144,14 @@ class YouTubeChatPoller {
     this.config = ytConfig;
   }
 
-  async _fetchLiveChatContinuation() {
+  /**
+   * watch ページから InnerTube キーを取り直す（直書きしない）。
+   * @param {{ force?: boolean }} [opts]
+   */
+  async _ensureInnertubeKey(opts = {}) {
+    if (!opts.force && this._innertubeKey) {
+      return { key: this._innertubeKey, html: null };
+    }
     const videoId = String(this.config.videoId || '').trim();
     if (!videoId) throw new Error('videoId が未設定です');
 
@@ -152,6 +160,11 @@ class YouTubeChatPoller {
     if (!this._innertubeKey) {
       throw new Error('InnerTube API キーを動画ページから取得できませんでした');
     }
+    return { key: this._innertubeKey, html };
+  }
+
+  async _fetchLiveChatContinuation() {
+    const { html } = await this._ensureInnertubeKey({ force: true });
 
     const initial = this._parseYtInitialData(html);
     if (!initial) throw new Error('動画ページの解析に失敗しました');
@@ -162,6 +175,12 @@ class YouTubeChatPoller {
       if (token && token.length > 20) return token;
     }
     throw new Error('ライブ配信中の動画ではありません（またはチャット continuation が見つかりません）');
+  }
+
+  /** キー失効・HTTP 4xx などで、キーと continuation をまとめて取り直す */
+  async _refreshInnertubeSession() {
+    this._innertubeKey = '';
+    this.continuation = await this._fetchLiveChatContinuation();
   }
 
   _parseYtInitialData(html) {
@@ -247,6 +266,15 @@ class YouTubeChatPoller {
       this.timer = setTimeout(() => this._poll(), interval);
     } catch (err) {
       console.error('[Poller] ポーリングエラー:', err.message);
+      // InnerTube はキーをソースに持たないため、失敗時に watch ページから取り直す
+      if (!this.useDataApi) {
+        try {
+          console.warn('[Poller] InnerTube キー／continuation を再取得します');
+          await this._refreshInnertubeSession();
+        } catch (refreshErr) {
+          console.warn('[Poller] InnerTube 再取得失敗:', refreshErr.message);
+        }
+      }
       this.retryCount++;
       if (this.retryCount > this.MAX_RETRY) {
         console.error('[Poller] リトライ上限に達しました。停止します。');

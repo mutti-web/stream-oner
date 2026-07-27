@@ -17,11 +17,13 @@ describe('youtube-api innertube key extraction', () => {
     assert.equal(extractInnertubeApiKeyFromHtml('<html></html>'), '');
   });
 
-  it('does not ship a hardcoded production key in module source', () => {
+  it('does not ship a hardcoded InnerTube key constant in module source', () => {
     const fs = require('fs');
     const path = require('path');
     const src = fs.readFileSync(path.join(__dirname, '../src/main/youtube-api.js'), 'utf8');
-    assert.equal(/AIzaSyAO_FJ2SlqU8Q4STEHL6lRqiXPj-WDrM7g/.test(src), false);
+    // 実キー文字列をテストに埋め込まない（Secret scanning 対策）。定数直書きの形だけ禁止する。
+    assert.equal(/\b(?:const|let|var)\s+INNERTUBE_KEY\b/.test(src), false);
+    assert.equal(/INNERTUBE_KEY\s*=\s*['"]AIza/.test(src), false);
   });
 });
 
