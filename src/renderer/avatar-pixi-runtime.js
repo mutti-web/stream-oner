@@ -858,6 +858,9 @@ async function applyFlash(msg) {
       s.flashSprite.texture = tex;
     }
     fitSprite(s.flashSprite, SLOT_TARGET_H);
+    const sc = Math.abs(s.flashSprite.scale.y);
+    const flipX = !!msg.flipX;
+    s.flashSprite.scale.set(flipX ? -sc : sc, sc);
   } catch (e) {
     console.warn('[PixiAvatar] flash texture failed', e);
     return;

@@ -30,8 +30,18 @@ describe('avatar-reactions', () => {
 
   it('toRemoteList strips paths', () => {
     const remote = reactionCfg.toRemoteList([
-      { id: 'react-abcd1234', label: 'A', path: '/secret.png', durationMs: 5000 },
+      { id: 'react-abcd1234', label: 'A', path: '/secret.png', durationMs: 5000, flipX: true },
     ]);
     assert.deepEqual(remote, [{ id: 'react-abcd1234', label: 'A', durationMs: 5000 }]);
+  });
+
+  it('preserves flipX in normalizeList', () => {
+    const list = reactionCfg.normalizeList([
+      { label: '反転', path: '/tmp/a.png', flipX: true },
+      { label: '通常', path: '/tmp/b.png', flipX: false },
+    ]);
+    assert.equal(list.length, 2);
+    assert.equal(list[0].flipX, true);
+    assert.equal(list[1].flipX, false);
   });
 });

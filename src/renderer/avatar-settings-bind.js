@@ -177,6 +177,24 @@
     body += '</div></details>';
 
     body += '<details class="av-adv-details">';
+    body += '<summary>カスタム部位</summary>';
+    body += '<div class="app-stack-md" data-custom-layers-wrap="' + prefix + '">';
+    body += '<div class="app-desc">基本部位の子として追加され、親の動きに追従します。PNG を指定して部位を増やせます。</div>';
+    body += '<div data-custom-layers-list="' + prefix + '"></div>';
+    body += '<md-outlined-button type="button" data-custom-add="' + prefix + '">部位を追加</md-outlined-button>';
+    body += '<input type="hidden" data-f="' + prefix + '_custom_layers_json" value="[]" />';
+    body += '</div></details>';
+
+    body += '<details class="av-adv-details">';
+    body += '<summary>リアクション PNG</summary>';
+    body += '<div class="app-stack-md" data-av-reactions-wrap="' + prefix + '">';
+    body += '<div class="app-desc">合成済み PNG を登録すると、スマホダッシュボードから一時表示できます。表示中は通常アバター（口パク・顔追従）は止まり、設定秒数後に自動で戻ります。</div>';
+    body += '<div data-av-reactions-list="' + prefix + '" class="av-reactions-list" data-av-reactions="' + prefix + '"></div>';
+    body += '<md-outlined-button type="button" data-av-reactions-add="' + prefix + '">リアクションを追加</md-outlined-button>';
+    body += '<input type="hidden" data-av-reactions-json="' + prefix + '" value="[]" />';
+    body += '</div></details>';
+
+    body += '<details class="av-adv-details">';
     body += '<summary>表示設定</summary>';
     body += '<div class="app-stack-md">';
     body += fieldRow({
@@ -288,15 +306,6 @@
           numberField(prefix, 'meshPitchStrength', '上下の強さ', { step: '0.05', min: 0, max: 2, value: '0.40' }) +
         '</div>',
     });
-    body += '</div></details>';
-
-    body += '<details class="av-adv-details">';
-    body += '<summary>カスタム部位</summary>';
-    body += '<div class="app-stack-md" data-custom-layers-wrap="' + prefix + '">';
-    body += '<div class="app-desc">基本部位の子として追加され、親の動きに追従します。PNG を指定して部位を増やせます。</div>';
-    body += '<div data-custom-layers-list="' + prefix + '"></div>';
-    body += '<md-outlined-button type="button" data-custom-add="' + prefix + '">部位を追加</md-outlined-button>';
-    body += '<input type="hidden" data-f="' + prefix + '_custom_layers_json" value="[]" />';
     body += '</div></details>';
     body += '</div>';
 

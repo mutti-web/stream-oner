@@ -45,11 +45,38 @@ function newReactionId() {
 }
 
 function reactionsHiddenInput(prefix) {
-  return document.getElementById(prefix === 'p2' ? 'av-p2-reactions-json' : 'av-p1-reactions-json');
+  return document.querySelector('[data-av-reactions-json="' + prefix + '"]');
 }
 
 function reactionsListEl(prefix) {
-  return document.getElementById(prefix === 'p2' ? 'av-reactions-list-p2' : 'av-reactions-list-p1');
+  return document.querySelector('[data-av-reactions-list="' + prefix + '"]');
+}
+
+function pathToFileUrl(filePath) {
+  const p = String(filePath || '').trim();
+  if (!p) return '';
+  if (p.startsWith('file://')) return p;
+  const normalized = p.replace(/\\/g, '/');
+  const encoded = normalized.split('/').map((seg, i) => {
+    if (i === 0 && /^[A-Za-z]:$/.test(seg)) return seg;
+    return encodeURIComponent(seg);
+  }).join('/');
+  if (normalized.startsWith('/')) return 'file://' + encoded;
+  return 'file:///' + encoded;
+}
+
+function updateReactionThumb(row) {
+  const img = row.querySelector('.av-reaction-thumb');
+  const path = String(row.querySelector('[data-reaction-k="path"]')?.value || '').trim();
+  if (!img) return;
+  if (!path) {
+    img.hidden = true;
+    img.removeAttribute('src');
+    return;
+  }
+  img.onerror = () => { img.hidden = true; };
+  img.onload = () => { img.hidden = false; };
+  img.src = pathToFileUrl(path);
 }
 
 function syncReactionsJson(prefix) {
@@ -62,6 +89,7 @@ function syncReactionsJson(prefix) {
     const label = String(row.querySelector('[data-reaction-k="label"]')?.value || '').trim();
     const path = String(row.querySelector('[data-reaction-k="path"]')?.value || '').trim();
     const durationSec = Number(row.querySelector('[data-reaction-k="durationMs"]')?.value);
+    const flipX = !!row.querySelector('[data-reaction-k="flipX"]')?.checked;
     const id = row.dataset.reactionId || newReactionId();
     if (!label || !path) return;
     items.push({
@@ -71,6 +99,7 @@ function syncReactionsJson(prefix) {
       durationMs: Number.isFinite(durationSec) && durationSec >= 1
         ? Math.round(Math.min(30, durationSec) * 1000)
         : REACTION_DEFAULT_MS,
+      flipX,
     });
   });
   hidden.value = JSON.stringify(items);
@@ -97,18 +126,32 @@ function createReactionRow(prefix, reaction = {}) {
   row.dataset.reactionId = reaction.id || newReactionId();
   const dur = Number(reaction.durationMs) || REACTION_DEFAULT_MS;
   row.innerHTML =
-    '<md-outlined-text-field data-reaction-k="label" label="ボタン名（スマホ表示）" maxlength="32"></md-outlined-text-field>' +
-    '<div class="url-row">' +
-      '<md-outlined-text-field data-reaction-k="path" label="PNG パス" readonly class="app-grow"></md-outlined-text-field>' +
-      '<md-outlined-button type="button" class="av-reaction-browse" data-reaction-prefix="' + prefix + '">参照</md-outlined-button>' +
+    '<div class="av-reaction-row-main">' +
+      '<img class="av-reaction-thumb" alt="" hidden />' +
+      '<div class="av-reaction-row-fields">' +
+        '<md-outlined-text-field data-reaction-k="label" label="ボタン名（スマホ表示）" maxlength="32"></md-outlined-text-field>' +
+        '<div class="url-row">' +
+          '<md-outlined-text-field data-reaction-k="path" label="PNG パス" readonly class="app-grow"></md-outlined-text-field>' +
+          '<md-outlined-button type="button" class="av-reaction-browse" data-reaction-prefix="' + prefix + '">参照</md-outlined-button>' +
+        '</div>' +
+        '<div class="av-reaction-row-meta">' +
+          '<md-outlined-text-field data-reaction-k="durationMs" label="表示秒数" type="number" min="1" max="30" step="1"></md-outlined-text-field>' +
+          '<label class="app-row app-row-compact app-toggle-inline">' +
+            '<span class="app-toggle-name">水平反転</span>' +
+            '<md-switch data-reaction-k="flipX" icons show-only-selected-icon></md-switch>' +
+          '</label>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
-    '<md-outlined-text-field data-reaction-k="durationMs" label="表示秒数" type="number" min="1" max="30" step="1"></md-outlined-text-field>' +
     '<div class="av-reaction-row-actions">' +
       '<md-outlined-button type="button" class="av-reaction-remove">削除</md-outlined-button>' +
     '</div>';
   row.querySelector('[data-reaction-k="label"]').value = reaction.label || '';
   row.querySelector('[data-reaction-k="path"]').value = reaction.path || '';
   row.querySelector('[data-reaction-k="durationMs"]').value = String(Math.round(dur / 1000));
+  const flipEl = row.querySelector('[data-reaction-k="flipX"]');
+  if (flipEl) flipEl.checked = !!reaction.flipX;
+  updateReactionThumb(row);
   return row;
 }
 
@@ -122,14 +165,6 @@ function renderReactionsList(prefix, reactions) {
   }
   syncReactionsJson(prefix);
   window.appUI?.patchAllSwitches?.();
-}
-
-function updateReactionsTitles() {
-  const labels = readFacePreviewLabels();
-  const t1 = document.getElementById('av-reactions-title-p1');
-  const t2 = document.getElementById('av-reactions-title-p2');
-  if (t1) t1.textContent = `${labels.p1} のリアクション`;
-  if (t2) t2.textContent = `${labels.p2} のリアクション`;
 }
 
 function buildAvatarPayload(opts = {}) {
@@ -727,7 +762,6 @@ async function initAvatar() {
   applyAvDisplayModeUi();
   renderReactionsList('p1', cfg.p1Reactions || []);
   renderReactionsList('p2', cfg.p2Reactions || []);
-  updateReactionsTitles();
 
   const mics = await scanMics();
   fillMicSelect(document.getElementById('av-mic-a'), mics, cfg.micADeviceId);
@@ -766,17 +800,16 @@ function bindAvatarActions() {
   document.getElementById('av-p1-label')?.addEventListener('input', () => {
     debouncedLabelUi();
     refreshFacePreviewLabels();
-    updateReactionsTitles();
   });
   document.getElementById('av-p2-label')?.addEventListener('input', () => {
     debouncedLabelUi();
     refreshFacePreviewLabels();
-    updateReactionsTitles();
   });
 
-  document.querySelectorAll('[data-av-reactions-add]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const prefix = btn.dataset.avReactionsAdd;
+  document.getElementById('panel-avatar')?.addEventListener('click', (ev) => {
+    const addBtn = ev.target?.closest?.('[data-av-reactions-add]');
+    if (addBtn) {
+      const prefix = addBtn.dataset.avReactionsAdd;
       const list = reactionsListEl(prefix);
       if (!list || list.querySelectorAll('[data-reaction-row]').length >= REACTION_MAX) {
         showFb('av-fb', `リアクションは最大 ${REACTION_MAX} 件までです。`, 'err');
@@ -786,7 +819,17 @@ function bindAvatarActions() {
       window.appUI?.patchAllSwitches?.();
       syncReactionsJson(prefix);
       debouncedAvatar();
-    });
+      return;
+    }
+
+    const removeBtn = ev.target?.closest?.('.av-reaction-remove');
+    if (!removeBtn) return;
+    const row = removeBtn.closest('[data-reaction-row]');
+    const list = row?.closest('[data-av-reactions]');
+    const prefix = list?.dataset?.avReactions;
+    row?.remove();
+    if (prefix) syncReactionsJson(prefix);
+    debouncedAvatar();
   });
 
   document.getElementById('panel-avatar')?.addEventListener('input', (ev) => {
@@ -798,13 +841,11 @@ function bindAvatarActions() {
     debouncedAvatar();
   });
 
-  document.getElementById('panel-avatar')?.addEventListener('click', (ev) => {
-    const removeBtn = ev.target?.closest?.('.av-reaction-remove');
-    if (!removeBtn) return;
-    const row = removeBtn.closest('[data-reaction-row]');
-    const list = row?.closest('[data-av-reactions]');
+  document.getElementById('panel-avatar')?.addEventListener('change', (ev) => {
+    const row = ev.target?.closest?.('[data-reaction-row]');
+    if (!row) return;
+    const list = row.closest('[data-av-reactions]');
     const prefix = list?.dataset?.avReactions;
-    row?.remove();
     if (prefix) syncReactionsJson(prefix);
     debouncedAvatar();
   });
@@ -911,6 +952,7 @@ function bindAvatarActions() {
         const prefix = reactBrowse.dataset.reactionPrefix;
         if (pathEl) {
           pathEl.value = p;
+          if (row) updateReactionThumb(row);
           if (prefix) syncReactionsJson(prefix);
           persistAvatar({ force: true });
         }

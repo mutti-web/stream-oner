@@ -35,6 +35,7 @@ function normalizeList(raw) {
       label,
       path,
       durationMs: clampDuration(item.durationMs),
+      flipX: !!item.flipX,
     });
     if (out.length >= MAX_REACTIONS) break;
   }

@@ -199,6 +199,7 @@ class AvatarManager extends EventEmitter {
       imageUrl,
       durationMs,
       label: reaction.label,
+      flipX: !!reaction.flipX,
     });
 
     this._flashTimers[slotId] = setTimeout(() => {
