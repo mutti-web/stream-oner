@@ -624,6 +624,7 @@
     getAvatarStatus: () => pass({ serverRunning: true, audioRunning: false }),
     openAvatarPreview: () => ok(),
     openImageFileDialog: () => pass(null),
+    getLocalImagePreview: () => pass(null),
     openDashboard: () => { window.open('/renderer/dashboard.html', '_blank'); },
     openSettings: () => {},
     obsConnect: () => ok(),

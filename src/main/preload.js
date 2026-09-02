@@ -65,6 +65,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   "recalibrate-avatar-face",
   "set-avatar-face-preview",
   "open-image-file-dialog",
+  "get-local-image-preview",
   "open-dashboard-window",
   "open-settings-window",
   "obs-connect",
@@ -307,6 +308,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   recalibrateAvatarFace: () => ipcRenderer.invoke("recalibrate-avatar-face"),
   setAvatarFacePreview: (enabled) => ipcRenderer.invoke("set-avatar-face-preview", !!enabled),
   openImageFileDialog: () => ipcRenderer.invoke("open-image-file-dialog"),
+  getLocalImagePreview: (filePath) => ipcRenderer.invoke("get-local-image-preview", filePath),
 
   openDashboard: () => ipcRenderer.invoke("open-dashboard-window"),
   openSettings: (opts) => ipcRenderer.invoke("open-settings-window", opts),

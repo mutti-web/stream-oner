@@ -779,8 +779,11 @@ function flushSettingsRendererMessages(opts = {}) {
 
 function createSettingsWindow(opts = {}) {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
     settingsWindow.focus();
-    flushSettingsRendererMessages(opts);
+    const wc = settingsWindow.webContents;
+    wc.once('did-finish-load', () => flushSettingsRendererMessages(opts));
+    wc.reloadIgnoringCache();
     return;
   }
 
@@ -1933,6 +1936,25 @@ function setupIpcHandlers() {
       properties: ['openFile'],
     });
     return result.canceled ? null : result.filePaths[0];
+  });
+
+  ipcMain.handle('get-local-image-preview', async (_ev, filePath) => {
+    try {
+      const raw = String(filePath || '').trim();
+      if (!raw) return null;
+      const resolved = path.resolve(raw);
+      if (!fs.existsSync(resolved)) return null;
+      const ext = path.extname(resolved).toLowerCase();
+      const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+        : ext === '.gif' ? 'image/gif'
+          : ext === '.webp' ? 'image/webp'
+            : 'image/png';
+      const buf = fs.readFileSync(resolved);
+      if (buf.length > 4 * 1024 * 1024) return null;
+      return `data:${mime};base64,${buf.toString('base64')}`;
+    } catch (_) {
+      return null;
+    }
   });
 }
 

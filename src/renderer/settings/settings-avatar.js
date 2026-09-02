@@ -65,18 +65,24 @@ function pathToFileUrl(filePath) {
   return 'file:///' + encoded;
 }
 
-function updateReactionThumb(row) {
+async function updateReactionThumb(row) {
   const img = row.querySelector('.av-reaction-thumb');
-  const path = String(row.querySelector('[data-reaction-k="path"]')?.value || '').trim();
+  const filePath = String(row.querySelector('[data-reaction-k="path"]')?.value || '').trim();
   if (!img) return;
-  if (!path) {
+  if (!filePath) {
     img.hidden = true;
     img.removeAttribute('src');
     return;
   }
+  const dataUrl = await window.electronAPI?.getLocalImagePreview?.(filePath).catch(() => null);
+  if (dataUrl) {
+    img.hidden = false;
+    img.src = dataUrl;
+    return;
+  }
   img.onerror = () => { img.hidden = true; };
   img.onload = () => { img.hidden = false; };
-  img.src = pathToFileUrl(path);
+  img.src = pathToFileUrl(filePath);
 }
 
 function syncReactionsJson(prefix) {
@@ -755,7 +761,7 @@ async function initAvatar() {
   setMdFieldValue(document.getElementById('av-obs-url'), cfg.obsUrl || 'http://127.0.0.1:3003/overlay');
 
   if (window.avatarSettingsUI) {
-    window.avatarSettingsUI.ensureBuilt();
+    window.avatarSettingsUI.buildForms();
     window.avatarSettingsUI.fillAll(cfg);
   }
   updateAvatarLabelUi();
