@@ -12,6 +12,10 @@ const MIME = {
   '.js': 'application/javascript; charset=utf-8',
   '.ico': 'image/x-icon',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
   '.woff2': 'font/woff2',
 };
 
@@ -114,7 +118,8 @@ class RemoteDashboardServer {
   _sendFile(filePath, res) {
     const ext = path.extname(filePath).toLowerCase();
     const type = MIME[ext] || 'application/octet-stream';
-    const isBinary = ext === '.ico' || ext === '.png' || ext === '.woff2';
+    const isBinary = ext === '.ico' || ext === '.png' || ext === '.jpg' || ext === '.jpeg'
+      || ext === '.gif' || ext === '.webp' || ext === '.woff2';
     const read = isBinary ? staticFileCache.readBuffer.bind(staticFileCache) : staticFileCache.readUtf8.bind(staticFileCache);
     read(filePath, (err, data) => {
       if (err) {
@@ -229,6 +234,21 @@ class RemoteDashboardServer {
         const r = await this._api.obsListAudioInputs();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(r));
+        return;
+      }
+
+      const reactionPreviewMatch = urlPath.match(/^\/remote\/avatar-reaction\/(p1|p2)\/([A-Za-z0-9_-]+)$/);
+      if (req.method === 'GET' && reactionPreviewMatch) {
+        const filePath = this._api.resolveReactionPreview(
+          reactionPreviewMatch[1],
+          decodeURIComponent(reactionPreviewMatch[2]),
+        );
+        if (!filePath) {
+          res.writeHead(404);
+          res.end('Not found');
+          return;
+        }
+        this._sendFile(filePath, res);
         return;
       }
 

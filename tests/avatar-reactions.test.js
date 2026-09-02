@@ -31,6 +31,18 @@ describe('avatar-reactions', () => {
   it('toRemoteList strips paths', () => {
     const remote = reactionCfg.toRemoteList([
       { id: 'react-abcd1234', label: 'A', path: '/secret.png', durationMs: 5000, flipX: true },
+    ], { slotId: 'p1' });
+    assert.deepEqual(remote, [{
+      id: 'react-abcd1234',
+      label: 'A',
+      durationMs: 5000,
+      previewUrl: '/remote/avatar-reaction/p1/react-abcd1234',
+    }]);
+  });
+
+  it('toRemoteList omits previewUrl without slotId', () => {
+    const remote = reactionCfg.toRemoteList([
+      { id: 'react-abcd1234', label: 'A', path: '/secret.png', durationMs: 5000 },
     ]);
     assert.deepEqual(remote, [{ id: 'react-abcd1234', label: 'A', durationMs: 5000 }]);
   });

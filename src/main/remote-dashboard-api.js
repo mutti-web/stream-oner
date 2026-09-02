@@ -85,8 +85,8 @@ class RemoteDashboardApi {
         displayMode: avCfg.displayMode || 'both',
         p1Label: avCfg.p1Label || '1人目',
         p2Label: avCfg.p2Label || '2人目',
-        p1Reactions: reactionCfg.toRemoteList(d.avatarManager?.getReactions?.('p1') || []),
-        p2Reactions: reactionCfg.toRemoteList(d.avatarManager?.getReactions?.('p2') || []),
+        p1Reactions: reactionCfg.toRemoteList(d.avatarManager?.getReactions?.('p1') || [], { slotId: 'p1' }),
+        p2Reactions: reactionCfg.toRemoteList(d.avatarManager?.getReactions?.('p2') || [], { slotId: 'p2' }),
         ready: avatarReady,
       },
       rpc,
@@ -323,6 +323,14 @@ class RemoteDashboardApi {
       this._notifyAction(actor, 'avatar-flash', reaction?.label || reactionId);
     }
     return r;
+  }
+
+  resolveReactionPreview(slotId, reactionId) {
+    const sid = slotId === 'p2' ? 'p2' : slotId === 'p1' ? 'p1' : null;
+    const id = String(reactionId || '').trim();
+    if (!sid || !id) return null;
+    const mgr = this._getDeps().avatarManager;
+    return mgr?.getReactionImagePath?.(sid, id) || null;
   }
 
   async avatarFlashClear(actor, body) {

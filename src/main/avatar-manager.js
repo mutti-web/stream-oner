@@ -167,6 +167,12 @@ class AvatarManager extends EventEmitter {
     return this._exists(filePath) ? filePath : null;
   }
 
+  /** @param {'p1'|'p2'} slotId @param {string} reactionId */
+  getReactionImagePath(slotId, reactionId) {
+    if (slotId !== 'p1' && slotId !== 'p2') return null;
+    return this._reactionImagePath(slotId, reactionId);
+  }
+
   /**
    * リアクション PNG を一時表示（通常アバターは非表示）。
    * @param {'p1'|'p2'} slotId

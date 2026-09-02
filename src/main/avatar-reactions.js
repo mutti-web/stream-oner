@@ -53,15 +53,23 @@ function findById(list, reactionId) {
 }
 
 /**
- * リモート UI 向け（パスは送らない）
+ * リモート UI 向け（ローカルパスは送らない）
  * @param {object[]} list
+ * @param {{ slotId?: 'p1'|'p2' }} [opts]
  */
-function toRemoteList(list) {
-  return normalizeList(list).map((r) => ({
-    id: r.id,
-    label: r.label,
-    durationMs: r.durationMs,
-  }));
+function toRemoteList(list, opts = {}) {
+  const slotId = opts.slotId === 'p2' ? 'p2' : opts.slotId === 'p1' ? 'p1' : null;
+  return normalizeList(list).map((r) => {
+    const item = {
+      id: r.id,
+      label: r.label,
+      durationMs: r.durationMs,
+    };
+    if (slotId) {
+      item.previewUrl = `/remote/avatar-reaction/${slotId}/${encodeURIComponent(r.id)}`;
+    }
+    return item;
+  });
 }
 
 module.exports = {

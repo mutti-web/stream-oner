@@ -212,6 +212,35 @@ function applyAvatarDisplayModeUi() {
   document.querySelector('.remote-hero')?.classList.toggle('is-single-slot', mode !== 'both');
 }
 
+const reactionThumbUrls = new Map();
+
+function revokeReactionThumbs() {
+  for (const url of reactionThumbUrls.values()) {
+    try { URL.revokeObjectURL(url); } catch (_) { /* */ }
+  }
+  reactionThumbUrls.clear();
+}
+
+async function loadReactionPreview(img, previewUrl, cacheKey) {
+  if (!img || !previewUrl || !token) return;
+  try {
+    const res = await fetch(previewUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('preview failed');
+    const blob = await res.blob();
+    const prev = reactionThumbUrls.get(cacheKey);
+    if (prev) URL.revokeObjectURL(prev);
+    const url = URL.createObjectURL(blob);
+    reactionThumbUrls.set(cacheKey, url);
+    img.src = url;
+    img.hidden = false;
+  } catch (_) {
+    img.hidden = true;
+    img.removeAttribute('src');
+  }
+}
+
 function renderReactionButtons(slotId, reactions, label) {
   const group = $(`remote-reactions-${slotId}`);
   const grid = $(`remote-reactions-grid-${slotId}`);
@@ -230,16 +259,31 @@ function renderReactionButtons(slotId, reactions, label) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn reaction-btn';
-    btn.textContent = r.label || 'リアクション';
     btn.dataset.slot = slotId;
     btn.dataset.reactionId = r.id;
     const sec = Math.round((Number(r.durationMs) || 4000) / 1000);
     btn.title = `${sec}秒表示`;
+
+    const thumb = document.createElement('img');
+    thumb.className = 'reaction-btn-thumb';
+    thumb.alt = '';
+    thumb.hidden = true;
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'reaction-btn-label';
+    labelEl.textContent = r.label || 'リアクション';
+
+    btn.append(thumb, labelEl);
     grid.appendChild(btn);
+
+    if (r.previewUrl) {
+      loadReactionPreview(thumb, r.previewUrl, `${slotId}:${r.id}`);
+    }
   }
 }
 
 function applyAvatarReactionsUi() {
+  revokeReactionThumbs();
   const av = state?.avatar || {};
   const mode = av.displayMode || 'both';
   const showP1 = mode === 'both' || mode === 'p1';
@@ -748,6 +792,7 @@ function logout() {
   setTopMenuOpen(false);
   closeActionSheet();
   closeUtilSheet();
+  revokeReactionThumbs();
   token = '';
   sessionId = '';
   localStorage.removeItem(TOKEN_KEY);
