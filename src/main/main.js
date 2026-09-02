@@ -13,6 +13,7 @@ const {
 const path = require('path');
 const fs   = require('fs');
 const http = require('http');
+const { execSync } = require('child_process');
 const { WebSocketServer } = require('ws');
 
 /** パッケージ済みビルドでは DevTools を開かない */
@@ -52,6 +53,36 @@ const YT_OVERLAY_HTML     = path.join(__dirname, '../renderer/youtube-overlay.ht
 const AVATAR_PREVIEW_HTML  = path.join(__dirname, '../renderer/avatar-preview.html');
 
 /** OBS オーバーレイポート（settings で上書き可・再起動後に反映） */
+function readGitRevision() {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      cwd: path.join(__dirname, '../..'),
+      encoding: 'utf8',
+      timeout: 3000,
+    }).trim();
+  } catch (_) {
+    return null;
+  }
+}
+
+const UI_REVISION = readGitRevision() || require('../../package.json').version;
+
+function getRuntimeInfo() {
+  let settingsMtime = null;
+  try {
+    settingsMtime = fs.statSync(SETTINGS_HTML).mtimeMs;
+  } catch (_) { /* */ }
+  return {
+    uiRevision: UI_REVISION,
+    version: require('../../package.json').version,
+    settingsPath: SETTINGS_HTML,
+    settingsMtime,
+    packaged: app.isPackaged,
+    isDev: IS_DEV,
+    cwd: process.cwd(),
+  };
+}
+
 adoptLegacyUserDataIfNeeded();
 installProcessGuards(APP_DISPLAY_NAME);
 const store = new SimpleStore();
@@ -156,7 +187,12 @@ if (!gotSingleInstanceLock) {
       (dashboardWindow && !dashboardWindow.isDestroyed() && dashboardWindow) ||
       (overlayWindow && !overlayWindow.isDestroyed() && overlayWindow) ||
       null;
-    if (win) {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.show();
+      if (settingsWindow.isMinimized()) settingsWindow.restore();
+      settingsWindow.focus();
+      settingsWindow.webContents.reloadIgnoringCache();
+    } else if (win) {
       if (win.isMinimized()) win.restore();
       win.show();
       win.focus();
@@ -797,7 +833,11 @@ function createSettingsWindow(opts = {}) {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
-  settingsWindow.loadFile(SETTINGS_HTML);
+  settingsWindow.webContents.session.clearCache().finally(() => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.loadFile(SETTINGS_HTML);
+    }
+  });
   settingsWindow.webContents.once('did-finish-load', () => {
     flushSettingsRendererMessages(opts);
   });
@@ -1519,6 +1559,8 @@ function setupIpcHandlers() {
     remoteSessionCount: remoteSessionStore?.listSessions().length ?? 0,
   }));
 
+  ipcMain.handle('get-runtime-info', () => getRuntimeInfo());
+
   ipcMain.handle('save-settings', (event, settings) => {
     try {
       if (settings.clientId      !== undefined) store.set('clientId',      settings.clientId);
@@ -2116,6 +2158,10 @@ function setupYtBridge() {
 if (gotSingleInstanceLock) {
 app.whenReady().then(async () => {
   console.log('[Main] アプリケーション起動');
+  const runtime = getRuntimeInfo();
+  console.log(`[Main] UI revision=${runtime.uiRevision} packaged=${runtime.packaged}`);
+  console.log(`[Main] cwd=${runtime.cwd}`);
+  console.log(`[Main] settings.html=${runtime.settingsPath}`);
 
   if (store.loadRecoveredFromBackup) {
     dialog.showMessageBox({

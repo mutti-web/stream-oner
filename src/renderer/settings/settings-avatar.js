@@ -786,6 +786,12 @@ async function initAvatar() {
   drawFacePreviewIdle();
   suppressAutoSave--;
   avatarFormsHydrated = true;
+  window.electronAPI?.getRuntimeInfo?.().then((info) => {
+    const el = document.getElementById('av-runtime-info');
+    if (!el || !info) return;
+    el.hidden = false;
+    el.textContent = `実行中 UI: ${info.uiRevision || '?'} | ${info.packaged ? 'インストール版' : '開発版'} | ${info.settingsPath || ''}`;
+  }).catch(() => { /* */ });
 }
 
 function bindAvatarActions() {

@@ -19,6 +19,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 /** レンダラー → メインへのリクエスト（invoke = 双方向, send = 一方向）*/
 const ALLOWED_INVOKE_CHANNELS = [
   "get-settings",
+  "get-runtime-info",
   "save-settings",
   "open-css-file-dialog",
   "load-css-file",
@@ -148,6 +149,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
    * @returns {Promise<Object>} settings
    */
   getSettings: () => ipcRenderer.invoke("get-settings"),
+  getRuntimeInfo: () => ipcRenderer.invoke("get-runtime-info"),
 
   /**
    * 設定を保存する

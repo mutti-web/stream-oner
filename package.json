@@ -5,6 +5,7 @@
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
+    "restart": "node scripts/restart-dev.mjs",
     "start:win": "node scripts/start-win.cjs",
     "dev": "electron .",
     "build:ui": "rollup -c",
