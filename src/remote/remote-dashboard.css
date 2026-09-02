@@ -367,6 +367,46 @@ h2 {
   white-space: nowrap;
 }
 
+.remote-reactions-hint {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  color: var(--md-sys-color-on-surface-variant);
+  line-height: 1.45;
+}
+.remote-reactions-group {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+.remote-reactions-group:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.remote-reactions-head {
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.remote-reactions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.reaction-btn {
+  min-height: 48px;
+  font-size: 0.95rem;
+  border-radius: 10px;
+  padding: 10px 8px;
+}
+.remote-flash-clear {
+  width: 100%;
+  min-height: 40px;
+  font-size: 0.85rem;
+}
+
 .session-log-head {
   display: flex;
   align-items: center;

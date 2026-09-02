@@ -450,6 +450,35 @@
       min-width: 0;
       width: auto;
     }
+    .av-reactions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .av-reaction-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: 10px;
+      background: var(--md-sys-color-surface-container-low);
+    }
+    .av-reaction-row .url-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+    }
+    .av-reaction-row .url-row md-outlined-text-field {
+      flex: 1;
+      min-width: 0;
+    }
+    .av-reaction-row-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
     .discord-connect-details {
       margin: 0 0 16px;
     }

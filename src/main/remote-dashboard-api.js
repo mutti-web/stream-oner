@@ -1,5 +1,7 @@
 'use strict';
 
+const reactionCfg = require('./avatar-reactions');
+
 /**
  * リモート API 用の状態取得・操作（PC の IPC と同等ロジックを集約）
  */
@@ -83,6 +85,8 @@ class RemoteDashboardApi {
         displayMode: avCfg.displayMode || 'both',
         p1Label: avCfg.p1Label || '1人目',
         p2Label: avCfg.p2Label || '2人目',
+        p1Reactions: reactionCfg.toRemoteList(d.avatarManager?.getReactions?.('p1') || []),
+        p2Reactions: reactionCfg.toRemoteList(d.avatarManager?.getReactions?.('p2') || []),
         ready: avatarReady,
       },
       rpc,
@@ -301,6 +305,34 @@ class RemoteDashboardApi {
     if (!m) return { success: false, error: 'セッションログ未初期化' };
     const r = m.markHighlight(entryId);
     if (r?.success !== false) this._notifyAction(actor, 'session-log-highlight', entryId || '');
+    return r;
+  }
+
+  async avatarFlash(actor, body) {
+    const slotId = body?.slotId === 'p2' ? 'p2' : body?.slotId === 'p1' ? 'p1' : null;
+    const reactionId = String(body?.reactionId || '').trim();
+    if (!slotId || !reactionId) {
+      return { success: false, error: 'slotId と reactionId が必要です' };
+    }
+    this._log(actor, 'avatar-flash', `${slotId}/${reactionId}`);
+    const mgr = this._getDeps().avatarManager;
+    if (!mgr?.flashReaction) return { success: false, error: 'AvatarManager 未初期化' };
+    const r = mgr.flashReaction(slotId, reactionId);
+    if (r?.success) {
+      const reaction = reactionCfg.findById(mgr.getReactions(slotId), reactionId);
+      this._notifyAction(actor, 'avatar-flash', reaction?.label || reactionId);
+    }
+    return r;
+  }
+
+  async avatarFlashClear(actor, body) {
+    const slotId = body?.slotId === 'p2' ? 'p2' : body?.slotId === 'p1' ? 'p1' : null;
+    if (!slotId) return { success: false, error: 'slotId が必要です' };
+    this._log(actor, 'avatar-flash-clear', slotId);
+    const mgr = this._getDeps().avatarManager;
+    if (!mgr?.clearFlash) return { success: false, error: 'AvatarManager 未初期化' };
+    const r = mgr.clearFlash(slotId);
+    if (r?.success) this._notifyAction(actor, 'avatar-flash-clear', slotId);
     return r;
   }
 }

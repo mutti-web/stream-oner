@@ -521,6 +521,11 @@ function createEmptySlot(id) {
     pupilTargetY: 0,
     pupilNextMoveAt: 0,
     lastPoseYaw: 0,
+    flashRoot: null,
+    flashSprite: null,
+    flashActive: false,
+    /** @type {ReturnType<typeof setTimeout>|null} */
+    flashTimerId: null,
   };
 }
 
@@ -791,8 +796,12 @@ function layoutSlots() {
     const s = slots[id];
     if (!s?.root) continue;
     const off = mode === 'p2' ? id !== 'p2' : mode === 'p1' ? id !== 'p1' : false;
-    s.root.visible = !off;
-    if (off) continue;
+    const showNormal = !off && !s.flashActive;
+    s.root.visible = showNormal;
+    if (off) {
+      if (s.flashRoot) s.flashRoot.visible = false;
+      continue;
+    }
 
     let cx;
     let cy = h * 0.55;
@@ -802,11 +811,68 @@ function layoutSlots() {
       cx = w * 0.5;
     }
     const { ox, oy } = slotOffsetPx(s.cfg, w || SLOT_REF_W, h || SLOT_REF_H);
-    s.root.position.set(cx + ox, cy + oy);
+    const pos = { x: cx + ox, y: cy + oy };
+    s.root.position.set(pos.x, pos.y);
+    if (s.flashRoot) {
+      s.flashRoot.position.set(pos.x, pos.y);
+      s.flashRoot.visible = !!s.flashActive;
+    }
   }
 }
 
+function clearFlashLocal(slotId, opts = {}) {
+  const s = slots[slotId];
+  if (!s) return;
+  if (s.flashTimerId) {
+    clearTimeout(s.flashTimerId);
+    s.flashTimerId = null;
+  }
+  s.flashActive = false;
+  if (s.flashRoot) s.flashRoot.visible = false;
+  if (!opts.skipLayout) layoutSlots();
+}
+
+async function applyFlash(msg) {
+  const slotId = msg?.slotId === 'p2' ? 'p2' : msg?.slotId === 'p1' ? 'p1' : null;
+  const imageUrl = String(msg?.imageUrl || '').trim();
+  if (!slotId || !imageUrl) return;
+  const s = slots[slotId];
+  if (!s?.root || !app) return;
+
+  clearFlashLocal(slotId, { skipLayout: true });
+
+  if (!s.flashRoot) {
+    s.flashRoot = new PIXI.Container();
+    s.flashRoot.sortableChildren = true;
+    s.flashRoot.zIndex = 200;
+    app.stage.addChild(s.flashRoot);
+  }
+
+  try {
+    const tex = await ensureTexture(imageUrl);
+    if (!s.flashSprite) {
+      s.flashSprite = new PIXI.Sprite(tex);
+      s.flashSprite.anchor.set(0.5);
+      s.flashRoot.addChild(s.flashSprite);
+    } else {
+      s.flashSprite.texture = tex;
+    }
+    fitSprite(s.flashSprite, SLOT_TARGET_H);
+  } catch (e) {
+    console.warn('[PixiAvatar] flash texture failed', e);
+    return;
+  }
+
+  s.flashActive = true;
+  layoutSlots();
+
+  const durationMs = Math.max(500, Number(msg?.durationMs) || 4000);
+  s.flashTimerId = setTimeout(() => clearFlashLocal(slotId), durationMs);
+}
+
 async function applyInit(msg) {
+  clearFlashLocal('p1');
+  clearFlashLocal('p2');
   const c = msg.config || {};
   displayMode = c.displayMode === 'p1' || c.displayMode === 'p2' ? c.displayMode : 'both';
   faceTrackEnabled = !!c.faceTrackEnabled;
@@ -974,6 +1040,7 @@ function placeSprite(sp, x, y, rot, baseScaleX, baseScaleY) {
 
 function applySlotVisuals(s, tNow) {
   if (!s?.root) return;
+  if (s.flashActive) return;
   const active = s.speaking || s.laughing;
   const silent = resolveSilentOpacity(s.cfg);
   // 設定プレビューでは silentOpacity に関係なく素材とラベルを確認できるようにする。
@@ -1316,6 +1383,11 @@ function connectWs() {
         updateAudio('p2', !!msg.p2Speaking, !!msg.p2Laughing, Number(msg.p2) || 0, msg.p2Vowel || null);
       } else if (msg.type === 'pose') {
         applyFacePose(msg);
+      } else if (msg.type === 'flash') {
+        applyFlash(msg).catch((e) => console.error('[PixiAvatar] flash', e));
+      } else if (msg.type === 'flash-clear') {
+        const sid = msg?.slotId === 'p2' ? 'p2' : msg?.slotId === 'p1' ? 'p1' : null;
+        if (sid) clearFlashLocal(sid);
       }
     };
   };

@@ -288,6 +288,18 @@ class RemoteDashboardServer {
         res.end(JSON.stringify(r));
         return;
       }
+      if (req.method === 'POST' && urlPath === '/remote/avatar-flash') {
+        const r = await this._api.avatarFlash(actor, body);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(r));
+        return;
+      }
+      if (req.method === 'POST' && urlPath === '/remote/avatar-flash/clear') {
+        const r = await this._api.avatarFlashClear(actor, body);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(r));
+        return;
+      }
       if (req.method === 'POST' && urlPath === '/remote/yt/pin') {
         const r = await this._api.pinMessage(actor, body.message);
         res.writeHead(200, { 'Content-Type': 'application/json' });

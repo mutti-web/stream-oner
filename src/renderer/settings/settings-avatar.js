@@ -28,7 +28,108 @@ function mergeAbsentSlotFieldsFromCache(payload) {
       payload[key] = avConfigCache[key];
     }
   }
+  if (!('p1Reactions' in payload) && avConfigCache.p1Reactions) {
+    payload.p1Reactions = avConfigCache.p1Reactions;
+  }
+  if (!('p2Reactions' in payload) && avConfigCache.p2Reactions) {
+    payload.p2Reactions = avConfigCache.p2Reactions;
+  }
   return payload;
+}
+
+const REACTION_DEFAULT_MS = 4000;
+const REACTION_MAX = 8;
+
+function newReactionId() {
+  return `react-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function reactionsHiddenInput(prefix) {
+  return document.getElementById(prefix === 'p2' ? 'av-p2-reactions-json' : 'av-p1-reactions-json');
+}
+
+function reactionsListEl(prefix) {
+  return document.getElementById(prefix === 'p2' ? 'av-reactions-list-p2' : 'av-reactions-list-p1');
+}
+
+function syncReactionsJson(prefix) {
+  const hidden = reactionsHiddenInput(prefix);
+  const list = reactionsListEl(prefix);
+  if (!hidden || !list) return;
+  const rows = list.querySelectorAll('[data-reaction-row]');
+  const items = [];
+  rows.forEach((row) => {
+    const label = String(row.querySelector('[data-reaction-k="label"]')?.value || '').trim();
+    const path = String(row.querySelector('[data-reaction-k="path"]')?.value || '').trim();
+    const durationSec = Number(row.querySelector('[data-reaction-k="durationMs"]')?.value);
+    const id = row.dataset.reactionId || newReactionId();
+    if (!label || !path) return;
+    items.push({
+      id,
+      label,
+      path,
+      durationMs: Number.isFinite(durationSec) && durationSec >= 1
+        ? Math.round(Math.min(30, durationSec) * 1000)
+        : REACTION_DEFAULT_MS,
+    });
+  });
+  hidden.value = JSON.stringify(items);
+  if (avConfigCache) {
+    avConfigCache[prefix === 'p2' ? 'p2Reactions' : 'p1Reactions'] = items;
+  }
+}
+
+function readReactionsList(prefix) {
+  syncReactionsJson(prefix);
+  try {
+    const hidden = reactionsHiddenInput(prefix);
+    const parsed = JSON.parse(hidden?.value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function createReactionRow(prefix, reaction = {}) {
+  const row = document.createElement('div');
+  row.className = 'av-reaction-row';
+  row.dataset.reactionRow = '1';
+  row.dataset.reactionId = reaction.id || newReactionId();
+  const dur = Number(reaction.durationMs) || REACTION_DEFAULT_MS;
+  row.innerHTML =
+    '<md-outlined-text-field data-reaction-k="label" label="ボタン名（スマホ表示）" maxlength="32"></md-outlined-text-field>' +
+    '<div class="url-row">' +
+      '<md-outlined-text-field data-reaction-k="path" label="PNG パス" readonly class="app-grow"></md-outlined-text-field>' +
+      '<md-outlined-button type="button" class="av-reaction-browse" data-reaction-prefix="' + prefix + '">参照</md-outlined-button>' +
+    '</div>' +
+    '<md-outlined-text-field data-reaction-k="durationMs" label="表示秒数" type="number" min="1" max="30" step="1"></md-outlined-text-field>' +
+    '<div class="av-reaction-row-actions">' +
+      '<md-outlined-button type="button" class="av-reaction-remove">削除</md-outlined-button>' +
+    '</div>';
+  row.querySelector('[data-reaction-k="label"]').value = reaction.label || '';
+  row.querySelector('[data-reaction-k="path"]').value = reaction.path || '';
+  row.querySelector('[data-reaction-k="durationMs"]').value = String(Math.round(dur / 1000));
+  return row;
+}
+
+function renderReactionsList(prefix, reactions) {
+  const list = reactionsListEl(prefix);
+  if (!list) return;
+  list.replaceChildren();
+  const items = Array.isArray(reactions) ? reactions.slice(0, REACTION_MAX) : [];
+  for (const r of items) {
+    list.appendChild(createReactionRow(prefix, r));
+  }
+  syncReactionsJson(prefix);
+  window.appUI?.patchAllSwitches?.();
+}
+
+function updateReactionsTitles() {
+  const labels = readFacePreviewLabels();
+  const t1 = document.getElementById('av-reactions-title-p1');
+  const t2 = document.getElementById('av-reactions-title-p2');
+  if (t1) t1.textContent = `${labels.p1} のリアクション`;
+  if (t2) t2.textContent = `${labels.p2} のリアクション`;
 }
 
 function buildAvatarPayload(opts = {}) {
@@ -48,6 +149,8 @@ function buildAvatarPayload(opts = {}) {
   if (window.avatarSettingsUI) {
     Object.assign(payload, window.avatarSettingsUI.collectAll());
   }
+  payload.p1Reactions = readReactionsList('p1');
+  payload.p2Reactions = readReactionsList('p2');
   mergeAbsentSlotFieldsFromCache(payload);
   return mergeAvatarPathsFromCache(payload, opts);
 }
@@ -622,6 +725,9 @@ async function initAvatar() {
   }
   updateAvatarLabelUi();
   applyAvDisplayModeUi();
+  renderReactionsList('p1', cfg.p1Reactions || []);
+  renderReactionsList('p2', cfg.p2Reactions || []);
+  updateReactionsTitles();
 
   const mics = await scanMics();
   fillMicSelect(document.getElementById('av-mic-a'), mics, cfg.micADeviceId);
@@ -660,10 +766,47 @@ function bindAvatarActions() {
   document.getElementById('av-p1-label')?.addEventListener('input', () => {
     debouncedLabelUi();
     refreshFacePreviewLabels();
+    updateReactionsTitles();
   });
   document.getElementById('av-p2-label')?.addEventListener('input', () => {
     debouncedLabelUi();
     refreshFacePreviewLabels();
+    updateReactionsTitles();
+  });
+
+  document.querySelectorAll('[data-av-reactions-add]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const prefix = btn.dataset.avReactionsAdd;
+      const list = reactionsListEl(prefix);
+      if (!list || list.querySelectorAll('[data-reaction-row]').length >= REACTION_MAX) {
+        showFb('av-fb', `リアクションは最大 ${REACTION_MAX} 件までです。`, 'err');
+        return;
+      }
+      list.appendChild(createReactionRow(prefix, { durationMs: REACTION_DEFAULT_MS }));
+      window.appUI?.patchAllSwitches?.();
+      syncReactionsJson(prefix);
+      debouncedAvatar();
+    });
+  });
+
+  document.getElementById('panel-avatar')?.addEventListener('input', (ev) => {
+    const row = ev.target?.closest?.('[data-reaction-row]');
+    if (!row) return;
+    const list = row.closest('[data-av-reactions]');
+    const prefix = list?.dataset?.avReactions;
+    if (prefix) syncReactionsJson(prefix);
+    debouncedAvatar();
+  });
+
+  document.getElementById('panel-avatar')?.addEventListener('click', (ev) => {
+    const removeBtn = ev.target?.closest?.('.av-reaction-remove');
+    if (!removeBtn) return;
+    const row = removeBtn.closest('[data-reaction-row]');
+    const list = row?.closest('[data-av-reactions]');
+    const prefix = list?.dataset?.avReactions;
+    row?.remove();
+    if (prefix) syncReactionsJson(prefix);
+    debouncedAvatar();
   });
 
   document.getElementById('av-scan-mics').addEventListener('click', async () => {
@@ -758,7 +901,22 @@ function bindAvatarActions() {
     }
 
     const btn = closestActionButton(ev, '.av-browse');
-    if (!btn) return;
+    if (!btn) {
+      const reactBrowse = closestActionButton(ev, '.av-reaction-browse');
+      if (reactBrowse) {
+        const p = await api.openImageFileDialog();
+        if (!p) return;
+        const row = reactBrowse.closest('[data-reaction-row]');
+        const pathEl = row?.querySelector('[data-reaction-k="path"]');
+        const prefix = reactBrowse.dataset.reactionPrefix;
+        if (pathEl) {
+          pathEl.value = p;
+          if (prefix) syncReactionsJson(prefix);
+          persistAvatar({ force: true });
+        }
+      }
+      return;
+    }
     const p = await api.openImageFileDialog();
     if (!p) return;
     const customPrefix = btn.dataset.targetCustomPath;

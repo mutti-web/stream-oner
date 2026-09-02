@@ -41,6 +41,8 @@ const REMOTE_ACTION_LABELS = {
   'session-log-start': 'セッションログを開始',
   'session-log-end': 'セッションログを終了',
   'session-log-highlight': 'ハイライトを追加',
+  'avatar-flash': 'リアクションを表示',
+  'avatar-flash-clear': '通常アバターに戻す',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -210,6 +212,47 @@ function applyAvatarDisplayModeUi() {
   document.querySelector('.remote-hero')?.classList.toggle('is-single-slot', mode !== 'both');
 }
 
+function renderReactionButtons(slotId, reactions, label) {
+  const group = $(`remote-reactions-${slotId}`);
+  const grid = $(`remote-reactions-grid-${slotId}`);
+  const head = $(`remote-reactions-head-${slotId}`);
+  if (!group || !grid) return;
+  const list = Array.isArray(reactions) ? reactions : [];
+  if (head) head.textContent = label || (slotId === 'p2' ? '2人目' : '1人目');
+  if (!list.length) {
+    group.hidden = true;
+    grid.replaceChildren();
+    return;
+  }
+  group.hidden = false;
+  grid.replaceChildren();
+  for (const r of list) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn reaction-btn';
+    btn.textContent = r.label || 'リアクション';
+    btn.dataset.slot = slotId;
+    btn.dataset.reactionId = r.id;
+    const sec = Math.round((Number(r.durationMs) || 4000) / 1000);
+    btn.title = `${sec}秒表示`;
+    grid.appendChild(btn);
+  }
+}
+
+function applyAvatarReactionsUi() {
+  const av = state?.avatar || {};
+  const mode = av.displayMode || 'both';
+  const showP1 = mode === 'both' || mode === 'p1';
+  const showP2 = mode === 'both' || mode === 'p2';
+  renderReactionButtons('p1', showP1 ? (av.p1Reactions || []) : [], av.p1Label || '1人目');
+  renderReactionButtons('p2', showP2 ? (av.p2Reactions || []) : [], av.p2Label || '2人目');
+  const section = $('remote-reactions-section');
+  const hasAny =
+    (showP1 && (av.p1Reactions || []).length > 0) ||
+    (showP2 && (av.p2Reactions || []).length > 0);
+  if (section) section.hidden = !hasAny;
+}
+
 function updateObsConnectUi() {
   const obs = state?.obs || {};
   const connected = !!obs.connected;
@@ -345,6 +388,7 @@ function applyState(s) {
   applyObsScene();
   updateMicLabels();
   applyObsMuteButtons();
+  applyAvatarReactionsUi();
   updateObsConnectUi();
   applySuiteToggles(s.suite || {});
   applyYtUi(s.yt || {});
@@ -874,6 +918,28 @@ function bindUi() {
   ['sw-discord', 'sw-youtube', 'sw-avatar'].forEach((id) => {
     $(id)?.addEventListener('change', suiteHandler);
   });
+
+  $('remote-reactions-section')?.addEventListener('click', (ev) => {
+    const reactBtn = ev.target?.closest?.('.reaction-btn');
+    if (reactBtn) {
+      api('/remote/avatar-flash', {
+        method: 'POST',
+        body: JSON.stringify({
+          slotId: reactBtn.dataset.slot,
+          reactionId: reactBtn.dataset.reactionId,
+        }),
+      }).catch((e) => window.alert(e.message));
+      return;
+    }
+    const clearBtn = ev.target?.closest?.('.remote-flash-clear');
+    if (clearBtn) {
+      api('/remote/avatar-flash/clear', {
+        method: 'POST',
+        body: JSON.stringify({ slotId: clearBtn.dataset.slot }),
+      }).catch((e) => window.alert(e.message));
+    }
+  });
+
   if ($('inp-device-label') && deviceLabel) $('inp-device-label').value = deviceLabel;
 }
 

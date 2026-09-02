@@ -3,6 +3,7 @@
 const suiteLayout = require('./suite-layout');
 const superchatTiers = require('./superchat-tiers');
 const slotCfg = require('./avatar-slot-config');
+const reactionCfg = require('./avatar-reactions');
 const { normalizeRules } = require('./obs-event-dispatcher');
 
 const STORE_KEY = 'suite.presets';
@@ -18,6 +19,8 @@ const AVATAR_K = {
   p2Label: 'avatar.p2Label',
   p1Slot: 'avatar.p1Slot',
   p2Slot: 'avatar.p2Slot',
+  p1Reactions: 'avatar.p1Reactions',
+  p2Reactions: 'avatar.p2Reactions',
 };
 
 const OBS_K = {
@@ -76,6 +79,8 @@ function captureAvatarVisual(store) {
     p2Label: store.get(AVATAR_K.p2Label, '配信者B') || '配信者B',
     p1Slot: readSlot(store, AVATAR_K.p1Slot),
     p2Slot: readSlot(store, AVATAR_K.p2Slot),
+    p1Reactions: reactionCfg.normalizeList(store.get(AVATAR_K.p1Reactions, [])),
+    p2Reactions: reactionCfg.normalizeList(store.get(AVATAR_K.p2Reactions, [])),
   };
 }
 
@@ -155,6 +160,8 @@ function normalizeState(raw) {
       p2Label: String(av.p2Label || '配信者B'),
       p1Slot: slotCfg.deepMerge(slotCfg.defaultSlot(), av.p1Slot || {}),
       p2Slot: slotCfg.deepMerge(slotCfg.defaultSlot(), av.p2Slot || {}),
+      p1Reactions: reactionCfg.normalizeList(av.p1Reactions || []),
+      p2Reactions: reactionCfg.normalizeList(av.p2Reactions || []),
     },
     obsEventActions: normalizeRules(s.obsEventActions),
     customCssPath: String(s.customCssPath || ''),
@@ -400,6 +407,8 @@ function writeSnapshotToStore(store, snapshot) {
   store.set(AVATAR_K.p2Label, av.p2Label);
   slotCfg.saveSlot(store, AVATAR_K.p1Slot, av.p1Slot);
   slotCfg.saveSlot(store, AVATAR_K.p2Slot, av.p2Slot);
+  store.set(AVATAR_K.p1Reactions, reactionCfg.normalizeList(av.p1Reactions || []));
+  store.set(AVATAR_K.p2Reactions, reactionCfg.normalizeList(av.p2Reactions || []));
 
   return { success: true, snapshot: s };
 }

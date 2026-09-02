@@ -15,6 +15,7 @@ const { createRendererStaticHandler } = require('./serve-renderer-static');
 const AvatarAudioManager = require('./avatar-audio-manager');
 const AvatarFaceManager = require('./avatar-face-manager');
 const slotCfg = require('./avatar-slot-config');
+const reactionCfg = require('./avatar-reactions');
 
 require('../renderer/shared/avatar-constants.js');
 const AC = global.AvatarConstants || {};
@@ -94,6 +95,8 @@ const K = {
   faceTrackEnabled: 'avatar.faceTrackEnabled',
   cameraDeviceId:   'avatar.cameraDeviceId',
   faceAssignSwap:   'avatar.faceAssignSwap',
+  p1Reactions:      'avatar.p1Reactions',
+  p2Reactions:      'avatar.p2Reactions',
 };
 
 const SLOT_KEYS = [
@@ -144,6 +147,84 @@ class AvatarManager extends EventEmitter {
     this._lastAudioSentAt = 0;
     this._lastAudioSentSnapshot = null;
     this._slotMicMuted = { p1: false, p2: false };
+    /** @type {{ p1: ReturnType<typeof setTimeout>|null, p2: ReturnType<typeof setTimeout>|null }} */
+    this._flashTimers = { p1: null, p2: null };
+  }
+
+  _reactionsStoreKey(slotId) {
+    return slotId === 'p2' ? K.p2Reactions : K.p1Reactions;
+  }
+
+  getReactions(slotId) {
+    const key = this._reactionsStoreKey(slotId);
+    return reactionCfg.normalizeList(this._store.get(key, []));
+  }
+
+  _reactionImagePath(slotId, reactionId) {
+    const reaction = reactionCfg.findById(this.getReactions(slotId), reactionId);
+    if (!reaction) return null;
+    const filePath = path.resolve(String(reaction.path || ''));
+    return this._exists(filePath) ? filePath : null;
+  }
+
+  /**
+   * リアクション PNG を一時表示（通常アバターは非表示）。
+   * @param {'p1'|'p2'} slotId
+   * @param {string} reactionId
+   */
+  flashReaction(slotId, reactionId) {
+    if (slotId !== 'p1' && slotId !== 'p2') {
+      return { success: false, error: 'スロット ID が不正です' };
+    }
+    const reaction = reactionCfg.findById(this.getReactions(slotId), reactionId);
+    if (!reaction) {
+      return { success: false, error: 'リアクションが見つかりません' };
+    }
+    const filePath = this._reactionImagePath(slotId, reactionId);
+    if (!filePath) {
+      return { success: false, error: 'PNG ファイルが見つかりません' };
+    }
+    const durationMs = reaction.durationMs;
+    const base = `http://127.0.0.1:${this._port}`;
+    const imageUrl = `${base}/avatar/${slotId}/reaction/${encodeURIComponent(reaction.id)}`;
+
+    if (this._flashTimers[slotId]) {
+      clearTimeout(this._flashTimers[slotId]);
+      this._flashTimers[slotId] = null;
+    }
+
+    this._broadcast({
+      type: 'flash',
+      slotId,
+      imageUrl,
+      durationMs,
+      label: reaction.label,
+    });
+
+    this._flashTimers[slotId] = setTimeout(() => {
+      this._flashTimers[slotId] = null;
+      this.clearFlash(slotId);
+    }, durationMs);
+
+    this.emit('flash-changed', { slotId, active: true, reactionId: reaction.id });
+    return { success: true, slotId, reactionId: reaction.id, durationMs };
+  }
+
+  /**
+   * リアクション表示を解除し通常アバターへ戻す。
+   * @param {'p1'|'p2'} slotId
+   */
+  clearFlash(slotId) {
+    if (slotId !== 'p1' && slotId !== 'p2') {
+      return { success: false, error: 'スロット ID が不正です' };
+    }
+    if (this._flashTimers[slotId]) {
+      clearTimeout(this._flashTimers[slotId]);
+      this._flashTimers[slotId] = null;
+    }
+    this._broadcast({ type: 'flash-clear', slotId });
+    this.emit('flash-changed', { slotId, active: false });
+    return { success: true, slotId };
   }
 
   setSlotMicMuted(slotId, muted) {
@@ -243,6 +324,8 @@ class AvatarManager extends EventEmitter {
       faceTrackEnabled: s.get(K.faceTrackEnabled, false),
       cameraDeviceId: s.get(K.cameraDeviceId, ''),
       faceAssignSwap: s.get(K.faceAssignSwap, false),
+      p1Reactions: this.getReactions('p1'),
+      p2Reactions: this.getReactions('p2'),
       obsUrl: `${base}/overlay`,
       previewUrl: `${base}/preview`,
       wsUrl: `ws://127.0.0.1:${this._port}`,
@@ -280,6 +363,12 @@ class AvatarManager extends EventEmitter {
     if (settings.faceTrackEnabled !== undefined) s.set(K.faceTrackEnabled, !!settings.faceTrackEnabled);
     if (settings.cameraDeviceId !== undefined) s.set(K.cameraDeviceId, String(settings.cameraDeviceId || ''));
     if (settings.faceAssignSwap !== undefined) s.set(K.faceAssignSwap, !!settings.faceAssignSwap);
+    if (settings.p1Reactions !== undefined) {
+      s.set(K.p1Reactions, reactionCfg.normalizeList(settings.p1Reactions));
+    }
+    if (settings.p2Reactions !== undefined) {
+      s.set(K.p2Reactions, reactionCfg.normalizeList(settings.p2Reactions));
+    }
 
     const saveSlotFromSettings = (slotId, storeKey, prefix) => {
       if (settings[`${prefix}Slot`]) {
@@ -602,6 +691,30 @@ class AvatarManager extends EventEmitter {
 
       if (serveAvatarOverlayStatic(url, res)) return;
 
+      const reactionMatch = url.match(/^\/avatar\/(p1|p2)\/reaction\/([A-Za-z0-9_-]+)$/);
+      if (reactionMatch) {
+        const filePath = this._reactionImagePath(reactionMatch[1], decodeURIComponent(reactionMatch[2]));
+        if (!filePath) {
+          res.writeHead(404);
+          res.end('Not found');
+          return;
+        }
+        const ext = path.extname(filePath).toLowerCase();
+        const types = {
+          '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+          '.gif': 'image/gif', '.webp': 'image/webp',
+        };
+        staticFileCache.readBuffer(filePath, (err, data) => {
+          if (err) { res.writeHead(404); res.end('Not found'); return; }
+          res.writeHead(200, {
+            'Content-Type': types[ext] || 'application/octet-stream',
+            'Cache-Control': 'no-store',
+          });
+          res.end(data);
+        });
+        return;
+      }
+
       const assetMatch = url.match(/^\/avatar\/(p1|p2)\/([a-z0-9-]+)$/);
       if (assetMatch) {
         const filePath = this._imagePathForAsset(assetMatch[1], assetMatch[2]);
@@ -684,6 +797,12 @@ class AvatarManager extends EventEmitter {
   }
 
   stopServer() {
+    for (const slotId of ['p1', 'p2']) {
+      if (this._flashTimers[slotId]) {
+        clearTimeout(this._flashTimers[slotId]);
+        this._flashTimers[slotId] = null;
+      }
+    }
     this._audio.stop();
     this._face.stop();
     if (this._wss) { try { this._wss.close(); } catch (_) { /* */ } this._wss = null; }

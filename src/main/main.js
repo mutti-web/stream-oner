@@ -1774,6 +1774,10 @@ function setupIpcHandlers() {
     avatarManager?.recalibrateFace() ?? { success: false, error: 'AvatarManager 未初期化' });
   ipcMain.handle('set-avatar-face-preview', (_event, enabled) =>
     avatarManager?.setFacePreviewEnabled(!!enabled) ?? { success: false, enabled: false });
+  ipcMain.handle('flash-avatar-reaction', (_event, { slotId, reactionId }) =>
+    avatarManager?.flashReaction?.(slotId, reactionId) ?? { success: false, error: 'AvatarManager 未初期化' });
+  ipcMain.handle('clear-avatar-flash', (_event, slotId) =>
+    avatarManager?.clearFlash?.(slotId) ?? { success: false, error: 'AvatarManager 未初期化' });
   ipcMain.handle('open-avatar-preview', () => createAvatarPreviewWindow());
 
   ipcMain.handle('obs-connect', async () => {
