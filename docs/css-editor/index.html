@@ -46,12 +46,13 @@
     <section class="panel" aria-labelledby="preview-title">
       <h2 id="preview-title">プレビュー</h2>
       <div id="preview-tools" class="preview-tools">
+        <div class="preview-mode-group" role="radiogroup" aria-label="プレビュー表示">
+          <span class="mode-label">表示</span>
+          <label class="mode-chip"><input type="radio" name="preview-mode" value="pc" checked /> PC</label>
+          <label class="mode-chip"><input type="radio" name="preview-mode" value="phone-portrait" /> スマホ縦</label>
+          <label class="mode-chip"><input type="radio" name="preview-mode" value="phone-landscape" /> スマホ横</label>
+        </div>
         <div class="preview-tool-set" data-for="youtube">
-          <label class="toggle">
-            <input type="checkbox" id="phone-preview" />
-            スマホ相当の縮小
-          </label>
-          <span class="tool-sep" aria-hidden="true"></span>
           <label class="toggle"><input type="checkbox" data-kind-filter="first" checked /> 初見</label>
           <label class="toggle"><input type="checkbox" data-kind-filter="regular" checked /> 常連</label>
           <label class="toggle"><input type="checkbox" data-kind-filter="member" checked /> メンバー</label>
@@ -67,9 +68,25 @@
           <span class="tool-hint">カードをクリックしても切替できます</span>
         </div>
       </div>
-      <div class="preview-wrap">
-        <div id="preview-stage" class="preview-stage">
-          <div id="chat-preview" class="chat-preview" aria-label="ダミーコメント">
+      <div class="preview-wrap" id="preview-shell" data-mode="pc">
+        <div class="phone-bezel" aria-hidden="true">
+          <div class="phone-notch"></div>
+          <div class="yt-app">
+            <div class="yt-app-bar">
+              <span class="yt-bar-btn" aria-hidden="true">←</span>
+              <span class="yt-live-pill">LIVE</span>
+              <span class="yt-bar-spacer"></span>
+              <span class="yt-bar-btn" aria-hidden="true">⋯</span>
+            </div>
+            <div class="yt-player">
+              <div class="yt-player-inner">
+                <div class="yt-fake-video" aria-hidden="true">
+                  <span class="yt-fake-caption">配信映像（1920×1080）</span>
+                </div>
+                <div id="preview-stage" class="preview-stage">
+                  <div id="chat-preview-wrap" class="preview-block">
+                    <p class="preview-block-label" data-preview-label="youtube">YouTube チャット</p>
+                    <div id="chat-preview" class="chat-preview" aria-label="ダミーコメント">
             <div class="chat-item" data-kind="first">
               <img class="chat-avatar" src="./assets/avatars/alice.svg" alt="" />
               <div class="chat-body">
@@ -130,22 +147,34 @@
                 <div class="superchat-amount">¥1,000</div>
               </div>
             </div>
-          </div>
+                    </div>
+                  </div>
 
-          <div id="discord-preview" class="discord-preview" hidden aria-label="Discord VC ダミー">
-            <div class="dc-user-list">
-              <div class="dc-card" data-dc-id="romu" tabindex="0" role="button" aria-pressed="false">
-                <div class="dc-avatar"><img src="./assets/avatars/romu.svg" alt="" /></div>
-                <div class="dc-name">romu</div>
+                  <div id="discord-preview-wrap" class="preview-block" hidden>
+                    <p class="preview-block-label" data-preview-label="discord">Discord VC</p>
+                    <div id="discord-preview" class="discord-preview" aria-label="Discord VC ダミー">
+                      <div class="dc-user-list">
+                        <div class="dc-card" data-dc-id="romu" tabindex="0" role="button" aria-pressed="false">
+                          <div class="dc-avatar"><img src="./assets/avatars/romu.svg" alt="" /></div>
+                          <div class="dc-name">romu</div>
+                        </div>
+                        <div class="dc-card speaking" data-dc-id="alice" data-demo-speaker tabindex="0" role="button" aria-pressed="true">
+                          <div class="dc-avatar"><img src="./assets/avatars/alice.svg" alt="" /></div>
+                          <div class="dc-name">Alice</div>
+                        </div>
+                        <div class="dc-card" data-dc-id="bob" tabindex="0" role="button" aria-pressed="false">
+                          <div class="dc-avatar dc-avatar--initial" aria-hidden="true">B</div>
+                          <div class="dc-name">Bob</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="dc-card speaking" data-dc-id="alice" data-demo-speaker tabindex="0" role="button" aria-pressed="true">
-                <div class="dc-avatar"><img src="./assets/avatars/alice.svg" alt="" /></div>
-                <div class="dc-name">Alice</div>
-              </div>
-              <div class="dc-card" data-dc-id="bob" tabindex="0" role="button" aria-pressed="false">
-                <div class="dc-avatar dc-avatar--initial" aria-hidden="true">B</div>
-                <div class="dc-name">Bob</div>
-              </div>
+            </div>
+            <div class="yt-meta">
+              <div class="yt-meta-title">配信タイトル（プレビュー）</div>
+              <div class="yt-meta-sub">Streamer · LIVE</div>
             </div>
           </div>
         </div>

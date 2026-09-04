@@ -6,15 +6,20 @@
   }
 
   const valuesByScope = schema.defaultsByScope();
-  let activeScopeId = schema.scopes[0].id;
+  let activeScopeId = 'all';
   let builtinCatalog = [];
+
+  const VIEW_TABS = [
+    { id: 'all', label: '全て' },
+    ...schema.scopes.map((s) => ({ id: s.id, label: s.label })),
+  ];
 
   const LOCAL_PRESET_KEY = 'streamoner-css-editor-local-presets-v1';
 
   const controlsEl = document.getElementById('controls');
   const noteEl = document.getElementById('scope-note');
   const tabsEl = document.getElementById('scope-tabs');
-  const phoneToggle = document.getElementById('phone-preview');
+  const previewShell = document.getElementById('preview-shell');
   const stageEl = document.getElementById('preview-stage');
   const presetSelect = document.getElementById('preset-select');
   const presetStatus = document.getElementById('preset-status');
@@ -24,12 +29,25 @@
   const fmtEl = document.getElementById('preset-format');
   if (verEl) verEl.textContent = String(schema.version);
   if (fmtEl) fmtEl.textContent = String(schema.presetFormat || 1);
+
+  function isAllView() {
+    return activeScopeId === 'all';
+  }
+
   function activeScope() {
+    if (isAllView()) {
+      return {
+        id: 'all',
+        label: '全て',
+        note: 'YouTube チャットと Discord VC の見た目をまとめて編集します。ダウンロード CSS には両方含まれます。',
+        tokens: [],
+      };
+    }
     return schema.getScope(activeScopeId);
   }
 
-  function activeValues() {
-    return valuesByScope[activeScopeId];
+  function scopeValues(scopeId) {
+    return valuesByScope[scopeId];
   }
 
   function hexToRgb(hex) {
@@ -67,8 +85,13 @@
     const el = previewRoot(scope);
     if (!el) return;
     const vals = valuesByScope[scope.id];
+    const byVar = Object.fromEntries(scope.tokens.map((t) => [t.cssVar, t]));
     for (const [k, v] of Object.entries(vals)) {
-      el.style.setProperty(k, v);
+      const token = byVar[k];
+      const cssVal = token && schema.formatTokenValue
+        ? schema.formatTokenValue(token, v)
+        : String(v);
+      el.style.setProperty(k, cssVal);
     }
   }
 
@@ -76,9 +99,10 @@
     for (const s of schema.scopes) applyPreview(s.id);
   }
 
-  function setValue(cssVar, value) {
-    activeValues()[cssVar] = value;
-    applyPreview(activeScopeId);
+  function setValue(scopeId, cssVar, value) {
+    if (!valuesByScope[scopeId]) return;
+    valuesByScope[scopeId][cssVar] = value;
+    applyPreview(scopeId);
     refreshCssSnippet();
   }
 
@@ -89,8 +113,20 @@
 
   function syncPreviewTools() {
     document.querySelectorAll('.preview-tool-set').forEach((el) => {
-      el.hidden = el.dataset.for !== activeScopeId;
+      const forId = el.dataset.for;
+      el.hidden = !(isAllView() || forId === activeScopeId);
     });
+  }
+
+  function syncPreviewVisibility() {
+    for (const s of schema.scopes) {
+      const wrap = document.getElementById(`${s.previewId}-wrap`)
+        || document.getElementById(s.previewId);
+      const show = isAllView() || activeScopeId === s.id;
+      if (wrap) wrap.hidden = !show;
+      const label = document.querySelector(`[data-preview-label="${s.id}"]`);
+      if (label) label.hidden = !isAllView();
+    }
   }
 
   function applyChatKindFilters() {
@@ -99,7 +135,10 @@
     root.querySelectorAll('.chat-item[data-kind]').forEach((item) => {
       const kind = item.dataset.kind;
       const cb = document.querySelector(`[data-kind-filter="${kind}"]`);
-      item.hidden = !!(cb && !cb.checked);
+      const show = !cb || cb.checked;
+      item.hidden = !show;
+      // 保険: hidden 属性以外でも確実に隠す
+      item.style.display = show ? '' : 'none';
     });
   }
 
@@ -146,13 +185,13 @@
   function buildTabs() {
     if (!tabsEl) return;
     tabsEl.replaceChildren();
-    for (const s of schema.scopes) {
+    for (const tab of VIEW_TABS) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'scope-tab' + (s.id === activeScopeId ? ' is-active' : '');
-      btn.textContent = s.label;
-      btn.dataset.scope = s.id;
-      btn.addEventListener('click', () => setActiveScope(s.id));
+      btn.className = 'scope-tab' + (tab.id === activeScopeId ? ' is-active' : '');
+      btn.textContent = tab.label;
+      btn.dataset.scope = tab.id;
+      btn.addEventListener('click', () => setActiveScope(tab.id));
       tabsEl.appendChild(btn);
     }
   }
@@ -160,23 +199,155 @@
   function setActiveScope(id) {
     activeScopeId = id;
     buildTabs();
-    for (const s of schema.scopes) {
-      const el = previewRoot(s);
-      if (el) el.hidden = s.id !== id;
-    }
-    if (phoneToggle && id !== 'youtube') {
-      phoneToggle.checked = false;
-      stageEl?.classList.remove('is-phone');
-    }
+    syncPreviewVisibility();
     syncPreviewTools();
     syncControlsFromValues();
+    updateOverlayScale();
   }
 
-  function buildControls() {
-    const scope = activeScope();
-    const values = activeValues();
-    controlsEl.replaceChildren();
-    if (noteEl) noteEl.textContent = scope.note || '';
+  function setPreviewMode(mode) {
+    if (!previewShell) return;
+    const next = mode || 'pc';
+    previewShell.dataset.mode = next;
+    previewShell.querySelector('.phone-bezel')?.setAttribute(
+      'aria-hidden',
+      next === 'pc' ? 'true' : 'false',
+    );
+    updateOverlayScale();
+  }
+
+  function updateOverlayScale() {
+    if (!previewShell || !stageEl) return;
+    if (!String(previewShell.dataset.mode || '').startsWith('phone')) {
+      stageEl.style.removeProperty('--overlay-scale');
+      return;
+    }
+    const player = previewShell.querySelector('.yt-player-inner');
+    if (!player) return;
+    // レイアウト確定後に計測（モード切替直後の clientWidth=0 を避ける）
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const w = player.clientWidth;
+        if (!w) return;
+        // 映像枠幅 ÷ 1920（OBS 論理キャンバス）。高さは 16:9 前提
+        stageEl.style.setProperty('--overlay-scale', String(w / 1920));
+      });
+    });
+  }
+
+  function bindPreviewMode() {
+    document.querySelectorAll('input[name="preview-mode"]').forEach((radio) => {
+      radio.addEventListener('change', () => {
+        if (radio.checked) setPreviewMode(radio.value);
+      });
+    });
+    const checked = document.querySelector('input[name="preview-mode"]:checked');
+    setPreviewMode(checked?.value || 'pc');
+
+    if (previewShell && typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => updateOverlayScale());
+      ro.observe(previewShell);
+      const player = previewShell.querySelector('.yt-player-inner');
+      if (player) ro.observe(player);
+    }
+    window.addEventListener('resize', updateOverlayScale);
+  }
+
+  function appendTokenControl(scope, t, values) {
+    const wrap = document.createElement('div');
+    wrap.className = 'control';
+    wrap.dataset.token = t.id;
+    wrap.dataset.scope = scope.id;
+
+    const lab = document.createElement('label');
+    lab.className = 'main';
+    lab.textContent = t.label;
+    wrap.appendChild(lab);
+
+    if (t.type === 'range') {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = String(t.min);
+      input.max = String(t.max);
+      input.step = String(t.step);
+      const num = parseFloat(String(values[t.cssVar]).replace(/px$/, '')) || t.default;
+      input.value = String(num);
+      const out = document.createElement('span');
+      out.className = 'val';
+      out.textContent = `${num}${t.unit || ''}`;
+      input.addEventListener('input', () => {
+        const v = `${input.value}${t.unit || ''}`;
+        out.textContent = v;
+        setValue(scope.id, t.cssVar, v);
+      });
+      row.append(input, out);
+      wrap.appendChild(row);
+    } else if (t.type === 'color') {
+      const input = document.createElement('input');
+      input.type = 'color';
+      input.value = String(values[t.cssVar] || t.default);
+      input.addEventListener('input', () => setValue(scope.id, t.cssVar, input.value));
+      wrap.appendChild(input);
+    } else if (t.type === 'rgba') {
+      const parsed = parseRgba(values[t.cssVar] || t.default);
+      const row = document.createElement('div');
+      row.className = 'row';
+      const color = document.createElement('input');
+      color.type = 'color';
+      color.value = toHex(parsed.r, parsed.g, parsed.b);
+      const alpha = document.createElement('input');
+      alpha.type = 'range';
+      alpha.min = '0';
+      alpha.max = '1';
+      alpha.step = '0.05';
+      alpha.value = String(parsed.a);
+      const out = document.createElement('span');
+      out.className = 'val';
+      const sync = () => {
+        const rgb = hexToRgb(color.value);
+        const a = Number(alpha.value);
+        const css = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${a})`;
+        out.textContent = `${Math.round(a * 100)}%`;
+        setValue(scope.id, t.cssVar, css);
+      };
+      color.addEventListener('input', sync);
+      alpha.addEventListener('input', sync);
+      out.textContent = `${Math.round(parsed.a * 100)}%`;
+      row.append(color, alpha, out);
+      wrap.appendChild(row);
+    } else if (t.type === 'select') {
+      const sel = document.createElement('select');
+      for (const opt of t.options || []) {
+        const o = document.createElement('option');
+        o.value = opt.value;
+        o.textContent = opt.label;
+        if (opt.value === values[t.cssVar]) o.selected = true;
+        sel.appendChild(o);
+      }
+      sel.addEventListener('change', () => setValue(scope.id, t.cssVar, sel.value));
+      wrap.appendChild(sel);
+    }
+
+    if (t.hint) {
+      const hint = document.createElement('p');
+      hint.className = 'hint';
+      hint.textContent = t.hint;
+      wrap.appendChild(hint);
+    }
+
+    controlsEl.appendChild(wrap);
+  }
+
+  function appendScopeControls(scope, { showScopeHeading } = {}) {
+    const values = scopeValues(scope.id);
+    if (showScopeHeading) {
+      const h = document.createElement('h3');
+      h.className = 'control-group';
+      h.textContent = scope.label;
+      controlsEl.appendChild(h);
+    }
 
     let lastGroup = null;
     for (const t of scope.tokens) {
@@ -187,91 +358,23 @@
         h.textContent = t.groupLabel || t.group;
         controlsEl.appendChild(h);
       }
-
-      const wrap = document.createElement('div');
-      wrap.className = 'control';
-      wrap.dataset.token = t.id;
-
-      const lab = document.createElement('label');
-      lab.className = 'main';
-      lab.textContent = t.label;
-      wrap.appendChild(lab);
-
-      if (t.type === 'range') {
-        const row = document.createElement('div');
-        row.className = 'row';
-        const input = document.createElement('input');
-        input.type = 'range';
-        input.min = String(t.min);
-        input.max = String(t.max);
-        input.step = String(t.step);
-        const num = parseFloat(String(values[t.cssVar]).replace(/px$/, '')) || t.default;
-        input.value = String(num);
-        const out = document.createElement('span');
-        out.className = 'val';
-        out.textContent = `${num}${t.unit || ''}`;
-        input.addEventListener('input', () => {
-          const v = `${input.value}${t.unit || ''}`;
-          out.textContent = v;
-          setValue(t.cssVar, v);
-        });
-        row.append(input, out);
-        wrap.appendChild(row);
-      } else if (t.type === 'color') {
-        const input = document.createElement('input');
-        input.type = 'color';
-        input.value = String(values[t.cssVar] || t.default);
-        input.addEventListener('input', () => setValue(t.cssVar, input.value));
-        wrap.appendChild(input);
-      } else if (t.type === 'rgba') {
-        const parsed = parseRgba(values[t.cssVar] || t.default);
-        const row = document.createElement('div');
-        row.className = 'row';
-        const color = document.createElement('input');
-        color.type = 'color';
-        color.value = toHex(parsed.r, parsed.g, parsed.b);
-        const alpha = document.createElement('input');
-        alpha.type = 'range';
-        alpha.min = '0';
-        alpha.max = '1';
-        alpha.step = '0.05';
-        alpha.value = String(parsed.a);
-        const out = document.createElement('span');
-        out.className = 'val';
-        const sync = () => {
-          const rgb = hexToRgb(color.value);
-          const a = Number(alpha.value);
-          const css = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${a})`;
-          out.textContent = `${Math.round(a * 100)}%`;
-          setValue(t.cssVar, css);
-        };
-        color.addEventListener('input', sync);
-        alpha.addEventListener('input', sync);
-        out.textContent = `${Math.round(parsed.a * 100)}%`;
-        row.append(color, alpha, out);
-        wrap.appendChild(row);
-      } else if (t.type === 'select') {
-        const sel = document.createElement('select');
-        for (const opt of t.options || []) {
-          const o = document.createElement('option');
-          o.value = opt.value;
-          o.textContent = opt.label;
-          if (opt.value === values[t.cssVar]) o.selected = true;
-          sel.appendChild(o);
-        }
-        sel.addEventListener('change', () => setValue(t.cssVar, sel.value));
-        wrap.appendChild(sel);
-      }
-
-      if (t.hint) {
-        const hint = document.createElement('p');
-        hint.className = 'hint';
-        hint.textContent = t.hint;
-        wrap.appendChild(hint);
-      }
-
-      controlsEl.appendChild(wrap);
+      appendTokenControl(scope, t, values);
     }
+  }
+
+  function buildControls() {
+    const scope = activeScope();
+    controlsEl.replaceChildren();
+    if (noteEl) noteEl.textContent = scope.note || '';
+
+    if (isAllView()) {
+      for (const s of schema.scopes) {
+        appendScopeControls(s, { showScopeHeading: true });
+      }
+      return;
+    }
+
+    appendScopeControls(scope, { showScopeHeading: false });
   }
 
   function syncControlsFromValues() {
@@ -475,10 +578,6 @@
     setPresetStatus('既定値に戻しました');
   }
 
-  phoneToggle?.addEventListener('change', () => {
-    stageEl.classList.toggle('is-phone', !!phoneToggle.checked);
-  });
-
   document.getElementById('btn-download')?.addEventListener('click', downloadCss);
   document.getElementById('btn-reset')?.addEventListener('click', resetDefaults);
   document.getElementById('btn-preset-apply')?.addEventListener('click', () => {
@@ -497,6 +596,7 @@
     fileInput.value = '';
   });
 
+  bindPreviewMode();
   bindPreviewExtras();
   buildTabs();
   initPresetCatalog().then(() => setActiveScope(activeScopeId));

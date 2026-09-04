@@ -242,6 +242,9 @@ button.primary:hover { filter: brightness(1.05); }
 }
 
 .preview-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin-bottom: 10px;
 }
 
@@ -250,6 +253,45 @@ button.primary:hover { filter: brightness(1.05); }
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
+}
+
+.preview-mode-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ed-muted);
+}
+
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--ed-text);
+  border: 1px solid var(--ed-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: var(--ed-surface);
+  cursor: pointer;
+}
+
+.mode-chip:has(input:checked) {
+  border-color: var(--ed-accent);
+  background: var(--ed-accent-soft);
+  color: var(--ed-accent);
+  font-weight: 600;
+}
+
+.mode-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .tool-sep {
@@ -292,6 +334,9 @@ button.primary:hover { filter: brightness(1.05); }
 
 .preview-wrap {
   overflow: auto;
+  min-height: 420px;
+  border-radius: 8px;
+  padding: 20px;
   background:
     linear-gradient(45deg, #2a2a2e 25%, transparent 25%),
     linear-gradient(-45deg, #2a2a2e 25%, transparent 25%),
@@ -300,20 +345,247 @@ button.primary:hover { filter: brightness(1.05); }
   background-size: 20px 20px;
   background-position: 0 0, 0 10px, 10px -10px, -10px 0;
   background-color: #1a1a1e;
-  min-height: 420px;
-  border-radius: 8px;
-  padding: 20px;
 }
+
+/* PC 既定: フレームなし */
+.phone-bezel { display: contents; }
+.phone-notch,
+.yt-app-bar,
+.yt-meta { display: none; }
+.yt-fake-video { display: none; }
+.yt-player-inner { position: relative; }
 
 .preview-stage {
-  width: 400px;
-  transform: scale(var(--ed-preview-scale));
-  transform-origin: top left;
+  --ed-preview-scale: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: max-content;
+  max-width: 100%;
 }
 
-.preview-stage.is-phone {
-  /* ~6" landscape width vs 1920 design ≈ 0.45 */
-  --ed-preview-scale: 0.55;
+.preview-block[hidden],
+.chat-preview[hidden],
+.discord-preview[hidden],
+.chat-item[hidden] {
+  display: none !important;
+}
+
+.preview-block-label {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #c8c8d0;
+  letter-spacing: 0.02em;
+}
+
+/* スマホ: 実機 CSS 論理解像度に近い枠 + YouTube 風（映像は常に 16:9）
+   縦 390×844 / 横 844×390（iPhone 14 系）。オーバーレイ縮尺 = 映像幅 / 1920 */
+#preview-shell[data-mode^="phone"] {
+  --phone-w: 390;
+  --phone-h: 844;
+  background: #0f0f0f;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16px;
+}
+
+#preview-shell[data-mode="phone-landscape"] {
+  --phone-w: 844;
+  --phone-h: 390;
+}
+
+#preview-shell[data-mode^="phone"] .phone-bezel {
+  display: flex;
+  flex-direction: column;
+  width: min(calc(var(--phone-w) * 1px), 100%);
+  aspect-ratio: var(--phone-w) / var(--phone-h);
+  height: auto;
+  background: #111;
+  border: 3px solid #2a2a2a;
+  border-radius: 36px;
+  padding: 11px 10px 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+#preview-shell[data-mode="phone-landscape"] .phone-bezel {
+  border-radius: 28px;
+  padding: 10px 14px;
+}
+
+#preview-shell[data-mode="phone-portrait"] .phone-notch {
+  display: block;
+  flex-shrink: 0;
+  width: 108px;
+  height: 28px;
+  margin: 0 auto 6px;
+  border-radius: 999px;
+  background: #000;
+}
+
+#preview-shell[data-mode^="phone"] .yt-app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0f0f0f;
+  color: #f1f1f1;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+#preview-shell[data-mode="phone-landscape"] .yt-app {
+  border-radius: 14px;
+  background: #000;
+}
+
+#preview-shell[data-mode^="phone"] .yt-app-bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+}
+
+#preview-shell[data-mode="phone-landscape"] .yt-app-bar {
+  display: none;
+}
+
+.yt-bar-btn { opacity: 0.85; }
+.yt-live-pill {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: #cc0000;
+  color: #fff;
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+.yt-bar-spacer { flex: 1; }
+
+#preview-shell[data-mode^="phone"] .yt-player {
+  flex-shrink: 0;
+  background: #000;
+}
+
+/* 縦: 画面幅いっぱいの 16:9（YouTube アプリと同じ） */
+#preview-shell[data-mode="phone-portrait"] .yt-player-inner {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+/* 横: 画面内に 16:9 を contain（左右に黒帯が出るのが正しい） */
+#preview-shell[data-mode="phone-landscape"] .yt-player {
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
+
+/* フォールバック（container query 非対応） */
+#preview-shell[data-mode="phone-landscape"] .yt-player-inner {
+  position: relative;
+  height: 100%;
+  width: auto;
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+@supports (width: 1cqw) {
+  #preview-shell[data-mode="phone-landscape"] .yt-player-inner {
+    height: auto;
+    width: min(100cqw, calc(100cqh * 16 / 9));
+    max-width: none;
+  }
+}
+
+#preview-shell[data-mode^="phone"] .yt-fake-video {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 30% 40%, #2a3344 0%, transparent 55%),
+    linear-gradient(160deg, #1b1f2a, #0e1016 70%);
+}
+
+#preview-shell[data-mode^="phone"] .yt-fake-caption {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.45);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+/* 1920×1080 論理キャンバスを映像枠にフィット（縮尺は JS が実測で更新） */
+#preview-shell[data-mode^="phone"] .preview-stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  max-width: none;
+  gap: 0;
+  --overlay-scale: 0.2;
+  transform: scale(var(--overlay-scale));
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+#preview-shell[data-mode^="phone"] .preview-stage .dc-card {
+  pointer-events: auto;
+}
+
+#preview-shell[data-mode^="phone"] .preview-block-label {
+  display: none;
+}
+
+/* Suite 統合 OBS レイアウト既定（settings-suite SUITE_LAYOUT_DEFAULTS）に合わせる */
+#preview-shell[data-mode^="phone"] #chat-preview-wrap {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 400px; /* youtube-overlay --width 既定（レイヤー枠は 440） */
+}
+
+#preview-shell[data-mode^="phone"] #discord-preview-wrap {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  width: 340px;
+}
+
+#preview-shell[data-mode^="phone"] .yt-meta {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  padding: 10px 12px 14px;
+  background: #0f0f0f;
+}
+
+#preview-shell[data-mode="phone-landscape"] .yt-meta {
+  display: none;
+}
+
+.yt-meta-title {
+  font-size: 0.9rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.yt-meta-sub {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #aaa;
 }
 
 /* Chat mock — mirrors youtube-overlay.html */
@@ -451,7 +723,7 @@ button.primary:hover { filter: brightness(1.05); }
   --list-gap: 4px;
   --name-radius: 6px;
   --name-font-size: 14px;
-  width: min(100%, 320px);
+  width: min(100%, 340px);
 }
 
 .dc-user-list {

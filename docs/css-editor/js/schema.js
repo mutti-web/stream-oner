@@ -379,9 +379,18 @@
     },
   ];
 
+  function formatTokenValue(t, raw) {
+    let cssVal = String(raw != null ? raw : t.default);
+    if (t.type === 'range' && t.unit && !/[a-z%]+$/i.test(cssVal)) {
+      cssVal = `${cssVal}${t.unit}`;
+    }
+    return cssVal;
+  }
+
   function tokenDefaults(tokens) {
     const out = {};
-    for (const t of tokens) out[t.cssVar] = t.default;
+    // range 既定値は単位付きで保持（単位なしだと width: var(--avatar-size) が無効になり SVG が巨大化する）
+    for (const t of tokens) out[t.cssVar] = formatTokenValue(t, t.default);
     return out;
   }
 
@@ -394,14 +403,6 @@
   /** @deprecated use defaultsByScope — flat map of youtube only for old callers */
   function defaultsMap() {
     return tokenDefaults(YOUTUBE_TOKENS);
-  }
-
-  function formatTokenValue(t, raw) {
-    let cssVal = String(raw != null ? raw : t.default);
-    if (t.type === 'range' && t.unit && !/[a-z%]+$/i.test(cssVal)) {
-      cssVal = `${cssVal}${t.unit}`;
-    }
-    return cssVal;
   }
 
   function exportCss(valuesByScope) {
@@ -493,6 +494,7 @@
     paddingPresets: PADDING_PRESETS,
     defaultsMap,
     defaultsByScope,
+    formatTokenValue,
     exportCss,
     exportPresetData,
     applyPresetData,
