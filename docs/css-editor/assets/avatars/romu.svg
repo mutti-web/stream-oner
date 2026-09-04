@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="frog mascot">
+  <rect width="128" height="128" rx="64" fill="#059669"/>
+  <ellipse cx="64" cy="76" rx="40" ry="32" fill="#6ee7b7"/>
+  <circle cx="44" cy="48" r="16" fill="#6ee7b7"/>
+  <circle cx="84" cy="48" r="16" fill="#6ee7b7"/>
+  <circle cx="44" cy="48" r="8" fill="#fff"/>
+  <circle cx="84" cy="48" r="8" fill="#fff"/>
+  <circle cx="46" cy="50" r="4.5" fill="#064e3b"/>
+  <circle cx="86" cy="50" r="4.5" fill="#064e3b"/>
+  <ellipse cx="64" cy="78" rx="10" ry="6" fill="#047857"/>
+  <path d="M48 90 Q64 100 80 90" fill="none" stroke="#047857" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="36" cy="72" r="5" fill="#34d399"/>
+  <circle cx="92" cy="72" r="5" fill="#34d399"/>
+</svg>

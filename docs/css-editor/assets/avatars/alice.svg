@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="fox mascot">
+  <rect width="128" height="128" rx="64" fill="#0ea5e9"/>
+  <ellipse cx="64" cy="78" rx="36" ry="30" fill="#fde68a"/>
+  <circle cx="64" cy="52" r="28" fill="#fbbf24"/>
+  <polygon points="36,38 28,12 52,34" fill="#fbbf24"/>
+  <polygon points="92,38 100,12 76,34" fill="#fbbf24"/>
+  <polygon points="38,34 32,18 50,32" fill="#fef3c7"/>
+  <polygon points="90,34 96,18 78,32" fill="#fef3c7"/>
+  <circle cx="54" cy="50" r="5" fill="#1f2937"/>
+  <circle cx="74" cy="50" r="5" fill="#1f2937"/>
+  <ellipse cx="64" cy="62" rx="6" ry="4" fill="#ea580c"/>
+  <path d="M54 70 Q64 78 74 70" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/>
+</svg>

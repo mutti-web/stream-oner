@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="star mascot">
+  <rect width="128" height="128" rx="64" fill="#f59e0b"/>
+  <circle cx="64" cy="68" r="36" fill="#fde68a"/>
+  <polygon points="64,18 72,48 104,48 78,66 88,96 64,78 40,96 50,66 24,48 56,48" fill="#fbbf24"/>
+  <circle cx="52" cy="64" r="5" fill="#78350f"/>
+  <circle cx="76" cy="64" r="5" fill="#78350f"/>
+  <path d="M52 78 Q64 88 76 78" fill="none" stroke="#78350f" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="44" cy="70" r="4" fill="#fb7185" opacity="0.7"/>
+  <circle cx="84" cy="70" r="4" fill="#fb7185" opacity="0.7"/>
+</svg>
