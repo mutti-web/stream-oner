@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>StreamONER CSS エディタ</title>
-  <meta name="description" content="YouTube チャットオーバーレイの見た目（色・フォントなど）を調整して CSS をダウンロード" />
+  <meta name="description" content="YouTube チャット / Discord VC オーバーレイの見た目を調整して CSS をダウンロード" />
   <link rel="stylesheet" href="./css/editor.css" />
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>StreamONER CSS エディタ</h1>
-      <p class="sub">チャットの見た目トークンを調整 → CSS をダウンロード → Suite のカスタム CSS に指定</p>
+      <p class="sub">見た目トークンを調整 → CSS をダウンロード → Suite のカスタム CSS に指定</p>
     </div>
     <a href="../">公式サイトへ</a>
   </header>
@@ -19,16 +19,15 @@
   <main class="layout">
     <section class="panel" aria-labelledby="controls-title">
       <h2 id="controls-title">見た目</h2>
+      <div id="scope-tabs" class="scope-tabs" role="tablist" aria-label="対象オーバーレイ"></div>
       <div id="controls" class="controls"></div>
       <div class="actions">
         <button type="button" class="primary" id="btn-download">CSS をダウンロード</button>
         <button type="button" id="btn-preset-mobile">プリセット: スマホ読みやすめ</button>
+        <button type="button" id="btn-preset-discord" hidden>プリセット: 落ち着いた発話</button>
         <button type="button" id="btn-reset">既定に戻す</button>
       </div>
-      <p class="note">
-        位置・幅・件数・表示時間・バッジ文言は Suite 本体で調整します。
-        バッジの色・サイズはこのエディタで変更できます。
-      </p>
+      <p class="note" id="scope-note"></p>
     </section>
 
     <section class="panel" aria-labelledby="preview-title">
@@ -101,10 +100,28 @@
               </div>
             </div>
           </div>
+
+          <div id="discord-preview" class="discord-preview" hidden aria-label="Discord VC ダミー">
+            <div class="dc-user-list">
+              <div class="dc-card">
+                <div class="dc-avatar">R</div>
+                <div class="dc-name">romu</div>
+              </div>
+              <div class="dc-card speaking">
+                <div class="dc-avatar">A</div>
+                <div class="dc-name">Alice（発話中）</div>
+              </div>
+              <div class="dc-card">
+                <div class="dc-avatar">B</div>
+                <div class="dc-name">Bob</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <p class="note">
-        ダウンロードした <code>stream-oner-custom.css</code> を Suite 設定の「カスタム CSS」にパス指定してください。反映まで数秒かかることがあります。
+        ダウンロードした <code>stream-oner-custom.css</code> を Suite 設定の「カスタム CSS」にパス指定してください。
+        Discord 変数は <code>#user-list</code> スコープで出力され、チャット側と衝突しません。反映まで数秒かかることがあります。
       </p>
     </section>
   </main>

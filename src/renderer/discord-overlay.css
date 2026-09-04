@@ -11,6 +11,12 @@
  * --name-bg-speaking: 発話中の名前背景色
  * --avatar-size     : アバターサイズ
  * --radius          : カードの角の丸み
+ * --list-gap        : カード間の余白
+ * --name-radius     : 名前背景の角丸
+ * --name-font-size  : 名前の文字サイズ
+ *
+ * カスタム CSS は CSS エディタ（https://streamoner.mutti.xyz/css-editor/）から
+ * `#user-list { ... }` スコープで書き出すと、チャット側の同名変数と衝突しません。
  *
  * 例（落ち着いたリング）:
  *   --speaking-color: #2d7a4f;
@@ -28,6 +34,9 @@
   --avatar-size:      40px;
   --font:             -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --radius:           12px;
+  --list-gap:         4px;
+  --name-radius:      6px;
+  --name-font-size:   14px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -42,7 +51,7 @@ html, body {
 #user-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--list-gap);
   padding: 4px;
 }
 
@@ -121,7 +130,7 @@ html, body {
 ============================================================ */
 .username {
   font-family: var(--font);
-  font-size: 14px;
+  font-size: var(--name-font-size);
   font-weight: 600;
   color: var(--text-normal);
   white-space: nowrap;
@@ -131,7 +140,7 @@ html, body {
   /* 名前の背景 */
   background: var(--name-bg);
   padding: 2px 8px;
-  border-radius: 6px;
+  border-radius: var(--name-radius);
 
   transition: color 0.15s ease, background 0.15s ease;
 }

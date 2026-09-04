@@ -72,6 +72,31 @@ a { color: var(--ed-accent); }
   font-size: 1rem;
 }
 
+.scope-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.scope-tab {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--ed-border);
+  background: var(--ed-bg);
+  color: var(--ed-muted);
+  padding: 6px 12px;
+  font-size: 0.9rem;
+}
+
+.scope-tab.is-active {
+  background: var(--ed-accent-soft);
+  border-color: var(--ed-accent);
+  color: var(--ed-accent);
+  font-weight: 600;
+}
+
 .control-group {
   margin: 8px 0 0;
   padding-top: 10px;
@@ -292,6 +317,84 @@ button.primary:hover { filter: brightness(1.05); }
   font-size: 0.8em;
   font-weight: 700;
   color: var(--superchat-color);
+}
+
+/* Discord VC mock — mirrors discord-overlay.css token names */
+.discord-preview {
+  --speaking-color: #23a55a;
+  --speaking-glow: rgba(35, 165, 90, 0.35);
+  --overlay-bg: rgba(18, 18, 24, 0.85);
+  --text-normal: rgba(255, 255, 255, 0.75);
+  --text-speaking: #ffffff;
+  --name-bg: rgba(0, 0, 0, 0.45);
+  --name-bg-speaking: rgba(35, 165, 90, 0.25);
+  --avatar-size: 40px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius: 12px;
+  --list-gap: 4px;
+  --name-radius: 6px;
+  --name-font-size: 14px;
+  width: 280px;
+}
+
+.dc-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--list-gap);
+}
+
+.dc-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px 6px 6px;
+  background: var(--overlay-bg);
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+}
+
+.dc-card.speaking {
+  border-color: var(--speaking-color);
+}
+
+.dc-avatar {
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  border-radius: 50%;
+  border: 2px solid transparent;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font);
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+  background: rgba(88, 101, 242, 0.3);
+}
+
+.dc-card.speaking .dc-avatar {
+  border-color: var(--speaking-color);
+  box-shadow: 0 0 0 2px var(--speaking-glow);
+  transform: scale(1.06);
+}
+
+.dc-name {
+  font-family: var(--font);
+  font-size: var(--name-font-size);
+  font-weight: 600;
+  color: var(--text-normal);
+  background: var(--name-bg);
+  padding: 2px 8px;
+  border-radius: var(--name-radius);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.dc-card.speaking .dc-name {
+  color: var(--text-speaking);
+  background: var(--name-bg-speaking);
 }
 
 .note {

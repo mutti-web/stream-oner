@@ -1,9 +1,10 @@
 # StreamONER CSS エディタ
 
-YouTube チャットオーバーレイの**見た目**（色・フォント・バッジなど）を調整し、カスタム CSS としてダウンロードするツールです。
+YouTube チャット / Discord VC オーバーレイの**見た目**を調整し、カスタム CSS としてダウンロードするツールです。
 
 - 公開 URL: https://streamoner.mutti.xyz/css-editor/
-- 使い方: 左で調整 →「CSS をダウンロード」→ Suite 設定のカスタム CSS にファイルパスを指定
-- レイアウト（位置・幅・件数など）とバッジ文言は Suite 本体で調整してください
+- 使い方: タブで対象を選び調整 →「CSS をダウンロード」→ Suite 設定のカスタム CSS にパス指定
+- Discord 変数は `#user-list` スコープで出力（チャット側と同名変数と衝突しない）
+- レイアウトとバッジ文言は Suite 本体で調整
 
-ビルド不要（静的 HTML/CSS/JS）。GitHub Pages の `docs/css-editor/` から配信されます。
+ビルド不要（静的 HTML/CSS/JS）。

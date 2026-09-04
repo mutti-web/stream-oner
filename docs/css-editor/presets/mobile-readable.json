@@ -2,25 +2,27 @@
   "id": "mobile-readable",
   "label": "スマホ読みやすめ",
   "description": "約6インチ視聴向け。文字サイズを大きめに。",
-  "values": {
-    "--font-size": "24px",
-    "--font-family": "'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif",
-    "--bg-color": "rgba(0, 0, 0, 0.78)",
-    "--text-color": "#f5f5f5",
-    "--username-color": "#7dd3fc",
-    "--superchat-color": "#fbbf24",
-    "--owner-color": "#f87171",
-    "--moderator-color": "#86efac",
-    "--member-color": "#818cf8",
-    "--first-color": "#10b981",
-    "--regular-color": "#f59e0b",
-    "--badge-font-size": "0.7em",
-    "--badge-padding": "2px 8px",
-    "--badge-radius": "6px",
-    "--badge-text-dark": "#1a1a1a",
-    "--badge-text-light": "#ffffff",
-    "--border-radius": "10px",
-    "--padding": "8px 12px",
-    "--avatar-size": "28px"
+  "scopes": {
+    "youtube": {
+      "--font-size": "24px",
+      "--font-family": "'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif",
+      "--bg-color": "rgba(0, 0, 0, 0.78)",
+      "--text-color": "#f5f5f5",
+      "--username-color": "#7dd3fc",
+      "--superchat-color": "#fbbf24",
+      "--owner-color": "#f87171",
+      "--moderator-color": "#86efac",
+      "--member-color": "#818cf8",
+      "--first-color": "#10b981",
+      "--regular-color": "#f59e0b",
+      "--badge-font-size": "0.7em",
+      "--badge-padding": "2px 8px",
+      "--badge-radius": "6px",
+      "--badge-text-dark": "#1a1a1a",
+      "--badge-text-light": "#ffffff",
+      "--border-radius": "10px",
+      "--padding": "8px 12px",
+      "--avatar-size": "28px"
+    }
   }
 }

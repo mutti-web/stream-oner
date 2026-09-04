@@ -1,15 +1,27 @@
 (function () {
   const schema = window.StreamOnerCssSchema;
-  if (!schema) {
-    console.error('StreamOnerCssSchema missing');
+  if (!schema?.scopes?.length) {
+    console.error('StreamOnerCssSchema missing scopes');
     return;
   }
 
-  const values = schema.defaultsMap();
+  const valuesByScope = schema.defaultsByScope();
+  let activeScopeId = schema.scopes[0].id;
+
   const controlsEl = document.getElementById('controls');
-  const previewEl = document.getElementById('chat-preview');
+  const noteEl = document.getElementById('scope-note');
+  const tabsEl = document.getElementById('scope-tabs');
   const phoneToggle = document.getElementById('phone-preview');
   const stageEl = document.getElementById('preview-stage');
+  const btnPreset = document.getElementById('btn-preset-mobile');
+
+  function activeScope() {
+    return schema.getScope(activeScopeId);
+  }
+
+  function activeValues() {
+    return valuesByScope[activeScopeId];
+  }
 
   function hexToRgb(hex) {
     const h = String(hex || '').replace('#', '');
@@ -37,21 +49,76 @@
     return `#${h(r)}${h(g)}${h(b)}`;
   }
 
-  function applyPreview() {
-    for (const [k, v] of Object.entries(values)) {
-      previewEl.style.setProperty(k, v);
+  function previewRoot(scope) {
+    return document.getElementById(scope.previewId);
+  }
+
+  function applyPreview(scopeId) {
+    const scope = schema.getScope(scopeId || activeScopeId);
+    const el = previewRoot(scope);
+    if (!el) return;
+    const vals = valuesByScope[scope.id];
+    for (const [k, v] of Object.entries(vals)) {
+      el.style.setProperty(k, v);
     }
   }
 
+  function applyAllPreviews() {
+    for (const s of schema.scopes) applyPreview(s.id);
+  }
+
   function setValue(cssVar, value) {
-    values[cssVar] = value;
-    applyPreview();
+    activeValues()[cssVar] = value;
+    applyPreview(activeScopeId);
+  }
+
+  function buildTabs() {
+    if (!tabsEl) return;
+    tabsEl.replaceChildren();
+    for (const s of schema.scopes) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'scope-tab' + (s.id === activeScopeId ? ' is-active' : '');
+      btn.textContent = s.label;
+      btn.dataset.scope = s.id;
+      btn.addEventListener('click', () => setActiveScope(s.id));
+      tabsEl.appendChild(btn);
+    }
+  }
+
+  function setActiveScope(id) {
+    activeScopeId = id;
+    buildTabs();
+    for (const s of schema.scopes) {
+      const el = previewRoot(s);
+      if (el) el.hidden = s.id !== id;
+    }
+    if (btnPreset) {
+      btnPreset.hidden = id !== 'youtube';
+    }
+    const btnDiscordPreset = document.getElementById('btn-preset-discord');
+    if (btnDiscordPreset) {
+      btnDiscordPreset.hidden = id !== 'discord';
+    }
+    if (phoneToggle) {
+      const wrap = phoneToggle.closest('label');
+      if (wrap) wrap.hidden = id !== 'youtube';
+      if (id !== 'youtube') {
+        phoneToggle.checked = false;
+        stageEl?.classList.remove('is-phone');
+      }
+    }
+    syncControlsFromValues();
   }
 
   function buildControls() {
+    const scope = activeScope();
+    const values = activeValues();
     controlsEl.replaceChildren();
+    if (noteEl) noteEl.textContent = scope.note || '';
+
     let lastGroup = null;
-    for (const t of schema.tokens) {
+    for (const t of scope.tokens) {
       if (t.group && t.group !== lastGroup) {
         lastGroup = t.group;
         const h = document.createElement('h3');
@@ -148,19 +215,25 @@
 
   function syncControlsFromValues() {
     buildControls();
-    applyPreview();
+    applyAllPreviews();
   }
 
   async function loadPreset(name) {
     const res = await fetch(`./presets/${name}.json`, { cache: 'no-store' });
     if (!res.ok) throw new Error('preset load failed');
     const data = await res.json();
-    Object.assign(values, schema.defaultsMap(), data.values || {});
+    if (data.scopes) {
+      for (const [sid, vals] of Object.entries(data.scopes)) {
+        if (valuesByScope[sid]) Object.assign(valuesByScope[sid], vals);
+      }
+    } else if (data.values) {
+      Object.assign(valuesByScope.youtube, data.values);
+    }
     syncControlsFromValues();
   }
 
   function downloadCss() {
-    const css = schema.exportCss(values);
+    const css = schema.exportCss(valuesByScope);
     const blob = new Blob([css], { type: 'text/css;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -171,7 +244,10 @@
   }
 
   function resetDefaults() {
-    Object.assign(values, schema.defaultsMap());
+    const fresh = schema.defaultsByScope();
+    for (const id of Object.keys(valuesByScope)) {
+      Object.assign(valuesByScope[id], fresh[id]);
+    }
     syncControlsFromValues();
   }
 
@@ -181,12 +257,19 @@
 
   document.getElementById('btn-download')?.addEventListener('click', downloadCss);
   document.getElementById('btn-reset')?.addEventListener('click', resetDefaults);
-  document.getElementById('btn-preset-mobile')?.addEventListener('click', () => {
+  btnPreset?.addEventListener('click', () => {
     loadPreset('mobile-readable').catch((e) => {
       console.error(e);
       alert('プリセットの読み込みに失敗しました');
     });
   });
+  document.getElementById('btn-preset-discord')?.addEventListener('click', () => {
+    loadPreset('discord-calm').catch((e) => {
+      console.error(e);
+      alert('プリセットの読み込みに失敗しました');
+    });
+  });
 
-  syncControlsFromValues();
+  buildTabs();
+  setActiveScope(activeScopeId);
 })();
