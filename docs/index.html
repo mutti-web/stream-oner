@@ -13,93 +13,94 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://streamoner.mutti.xyz/">
   <link rel="canonical" href="https://streamoner.mutti.xyz/">
-  <style>
-    body { font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; line-height: 1.7; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; color: #111; }
-    h1 { font-size: 2rem; margin-bottom: 0.25rem; }
-    h2 { margin-top: 2rem; font-size: 1.25rem; }
-    .lede { font-size: 1.05rem; }
-    a { color: #0b57d0; }
-  </style>
+  <link rel="stylesheet" href="./site.css">
 </head>
 <body>
-  <header>
-    <h1>StreamONER</h1>
-    <p><strong>アプリ名: StreamONER</strong></p>
-  </header>
+  <div class="site-wrap">
+    <header class="site-header">
+      <div>
+        <h1>StreamONER</h1>
+        <p class="tagline">配信オーバーレイをまとめて扱うデスクトップアプリ</p>
+      </div>
+      <a class="site-cta" href="./css-editor/">CSS エディタを開く</a>
+    </header>
 
-  <main>
-    <section>
-      <h2>StreamONER とは</h2>
-      <p class="lede">
-        StreamONER は、配信者向けのデスクトップアプリケーションです。
-        OBS で使う配信オーバーレイの表示と操作を助けることが目的です。
-      </p>
-    </section>
+    <main>
+      <section class="site-section">
+        <h2>StreamONER とは</h2>
+        <p class="lede">
+          StreamONER は、配信者向けのデスクトップアプリケーションです。
+          OBS で使う配信オーバーレイの表示と操作を助けることが目的です。
+        </p>
+        <p class="site-muted">対応環境: Windows / macOS（配布インストーラは主に Windows x64）。</p>
+      </section>
 
-    <section>
-      <h2>アプリの目的と機能</h2>
-      <p>StreamONER は、次のユーザー向け機能を提供します。</p>
-      <ul>
-        <li>Discord のボイスチャンネル参加者表示と発話ハイライトを、OBS のブラウザソースに表示する</li>
-        <li>YouTube ライブチャットを、配信中に OBS のブラウザソースへ表示する</li>
-        <li>マイク入力に連動するアバター（口パク）オーバーレイを表示する</li>
-        <li>これらのオーバーレイを配信制作のワークフローに合わせてまとめて使う</li>
-      </ul>
-      <p>対応環境: Windows / macOS 向けデスクトップアプリ（配布インストーラは主に Windows x64）。</p>
-    </section>
+      <section class="site-section">
+        <h2>できること</h2>
+        <ul class="feature-list">
+          <li>Discord のボイスチャンネル参加者表示と発話ハイライトを、OBS のブラウザソースに表示する</li>
+          <li>YouTube ライブチャットを、配信中に OBS のブラウザソースへ表示する</li>
+          <li>マイク入力に連動するアバター（口パク）オーバーレイを表示する</li>
+          <li>これらのオーバーレイを配信制作のワークフローに合わせてまとめて使う</li>
+        </ul>
+      </section>
 
-    <section>
-      <h2>Google / YouTube アカウント連携が必要な理由</h2>
-      <p>
-        StreamONER は、ユーザーが許可した場合に限り、Google の認可を使って
-        認可したユーザー自身の YouTube データへ<strong>読み取り専用</strong>でアクセスします。
-        利用スコープは
-        <code>https://www.googleapis.com/auth/youtube.readonly</code>
-        のみです。
-      </p>
-      <p>この権限は、次の目的にだけ使います。</p>
-      <ol>
-        <li>認可したユーザーの YouTube チャンネルを確認し、連携状態を表示する</li>
-        <li>そのユーザーが配信中の YouTube ライブを検出し、対象の動画 ID を取得する</li>
-      </ol>
-      <p>
-        ライブチャット表示は別のユーザー向け機能であり、
-        Google OAuth のアクセストークンおよびリフレッシュトークンを
-        チャットメッセージの取得には使用しません。
-      </p>
-      <p>
-        StreamONER は Google のパスワードを取得しません。
-        認証は Google の同意画面上で行われます。
-      </p>
-    </section>
+      <section class="site-section">
+        <h2>CSS エディタ</h2>
+        <p>
+          YouTube チャット / Discord VC の見た目（フォント・色・バッジ・発話ハイライトなど）をブラウザで調整し、カスタム CSS としてダウンロードできます。
+        </p>
+        <p>
+          <a href="./css-editor/">CSS エディタを開く</a>
+          ·
+          <a href="https://streamoner.mutti.xyz/css-editor/">https://streamoner.mutti.xyz/css-editor/</a>
+        </p>
+      </section>
 
-    <section>
-      <h2>CSS エディタ</h2>
-      <p>
-        YouTube チャット / Discord VC の見た目（フォント・色・バッジ・発話ハイライトなど）をブラウザで調整し、カスタム CSS としてダウンロードできます。
-        <a href="./css-editor/">CSS エディタを開く</a>
-        （<a href="https://streamoner.mutti.xyz/css-editor/">https://streamoner.mutti.xyz/css-editor/</a>）
-      </p>
-    </section>
+      <section class="site-section">
+        <h2>Google / YouTube アカウント連携が必要な理由</h2>
+        <p>
+          StreamONER は、ユーザーが許可した場合に限り、Google の認可を使って
+          認可したユーザー自身の YouTube データへ<strong>読み取り専用</strong>でアクセスします。
+          利用スコープは
+          <code>https://www.googleapis.com/auth/youtube.readonly</code>
+          のみです。
+        </p>
+        <p>この権限は、次の目的にだけ使います。</p>
+        <ol>
+          <li>認可したユーザーの YouTube チャンネルを確認し、連携状態を表示する</li>
+          <li>そのユーザーが配信中の YouTube ライブを検出し、対象の動画 ID を取得する</li>
+        </ol>
+        <p>
+          ライブチャット表示は別のユーザー向け機能であり、
+          Google OAuth のアクセストークンおよびリフレッシュトークンを
+          チャットメッセージの取得には使用しません。
+        </p>
+        <p>
+          StreamONER は Google のパスワードを取得しません。
+          認証は Google の同意画面上で行われます。
+        </p>
+      </section>
 
-    <section>
-      <h2>プライバシーポリシー</h2>
-      <p>
-        Google / YouTube データの取り扱いについては、
-        <a href="https://streamoner.mutti.xyz/privacy.html">プライバシーポリシー</a>
-        を参照してください。
-        この URL は、OAuth 同意画面に登録しているプライバシーポリシーと同じです。
-      </p>
-    </section>
+      <section class="site-section">
+        <h2>プライバシーポリシー</h2>
+        <p>
+          Google / YouTube データの取り扱いについては、
+          <a href="https://streamoner.mutti.xyz/privacy.html">プライバシーポリシー</a>
+          を参照してください。
+          この URL は、OAuth 同意画面に登録しているプライバシーポリシーと同じです。
+        </p>
+      </section>
 
-    <section>
-      <h2>お問い合わせ</h2>
-      <ul>
-        <li>運営: romu</li>
-        <li>メール: <a href="mailto:contact@mutti.xyz">contact@mutti.xyz</a></li>
-        <li>ホームページ: <a href="https://streamoner.mutti.xyz/">https://streamoner.mutti.xyz/</a></li>
-      </ul>
-    </section>
-  </main>
+      <section class="site-section">
+        <h2>お問い合わせ</h2>
+        <ul class="site-footer-links">
+          <li>運営: romu</li>
+          <li>メール: <a href="mailto:contact@mutti.xyz">contact@mutti.xyz</a></li>
+          <li>ホームページ: <a href="https://streamoner.mutti.xyz/">https://streamoner.mutti.xyz/</a></li>
+        </ul>
+      </section>
+    </main>
+  </div>
 </body>
 </html>

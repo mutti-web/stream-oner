@@ -76,10 +76,21 @@
     }
 
     .chat-item.superchat {
-      border-left: 3px solid var(--sc-tier-color, var(--superchat-color));
+      position: relative;
       background: color-mix(in srgb, var(--sc-tier-color, var(--superchat-color)) 18%, transparent);
       transform: scale(var(--sc-tier-scale, 1));
       transform-origin: left center;
+    }
+    .chat-item.superchat::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      border-radius: 999px;
+      background: var(--sc-tier-color, var(--superchat-color));
+      pointer-events: none;
     }
     .chat-item.superchat .superchat-amount {
       color: var(--sc-tier-color, var(--superchat-color));

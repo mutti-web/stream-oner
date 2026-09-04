@@ -1,0 +1,126 @@
+:root {
+  --site-bg: #ffffff;
+  --site-surface: #ffffff;
+  --site-border: #e3e3e8;
+  --site-text: #111111;
+  --site-muted: #5c5c66;
+  --site-accent: #0b57d0;
+  --site-accent-soft: #e8f0fe;
+  --site-font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--site-font);
+  color: var(--site-text);
+  background: var(--site-bg);
+  line-height: 1.65;
+}
+
+a { color: var(--site-accent); }
+
+.site-wrap {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3.5rem;
+}
+
+.site-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 0 0 1.5rem;
+  border-bottom: 1px solid var(--site-border);
+  margin-bottom: 0;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+}
+
+.site-header .tagline {
+  margin: 0.35rem 0 0;
+  color: var(--site-muted);
+  font-size: 0.95rem;
+}
+
+.site-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 6px;
+  background: var(--site-accent);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.site-cta:hover {
+  filter: brightness(1.05);
+}
+
+/* カードなし: 見出し＋本文を区切り線で並べる */
+.site-section {
+  margin: 0;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--site-border);
+  background: transparent;
+  border-radius: 0;
+}
+
+.site-section:last-child {
+  border-bottom: none;
+}
+
+.site-section h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.site-section p:last-child,
+.site-section ul:last-child,
+.site-section ol:last-child {
+  margin-bottom: 0;
+}
+
+.lede {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.feature-list {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.feature-list li + li {
+  margin-top: 0.35rem;
+}
+
+.site-muted {
+  color: var(--site-muted);
+  font-size: 0.92rem;
+}
+
+.site-footer-links {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+code {
+  font-size: 0.88em;
+  background: var(--site-accent-soft);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}

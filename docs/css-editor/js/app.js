@@ -129,6 +129,15 @@
     }
   }
 
+  function updateChatFilterSummary() {
+    const summary = document.getElementById('chat-filter-summary');
+    if (!summary) return;
+    const boxes = [...document.querySelectorAll('[data-kind-filter]')];
+    const total = boxes.length;
+    const on = boxes.filter((cb) => cb.checked).length;
+    summary.textContent = `${on}/${total}`;
+  }
+
   function applyChatKindFilters() {
     const root = document.getElementById('chat-preview');
     if (!root) return;
@@ -140,6 +149,7 @@
       // 保険: hidden 属性以外でも確実に隠す
       item.style.display = show ? '' : 'none';
     });
+    updateChatFilterSummary();
   }
 
   function setDiscordSpeaking(card, on) {
@@ -253,7 +263,7 @@
     window.addEventListener('resize', updateOverlayScale);
   }
 
-  function appendTokenControl(scope, t, values) {
+  function appendTokenControl(scope, t, values, parent) {
     const wrap = document.createElement('div');
     wrap.className = 'control';
     wrap.dataset.token = t.id;
@@ -337,29 +347,43 @@
       wrap.appendChild(hint);
     }
 
-    controlsEl.appendChild(wrap);
+    (parent || controlsEl).appendChild(wrap);
   }
 
-  function appendScopeControls(scope, { showScopeHeading } = {}) {
-    const values = scopeValues(scope.id);
-    if (showScopeHeading) {
-      const h = document.createElement('h3');
-      h.className = 'control-group';
-      h.textContent = scope.label;
-      controlsEl.appendChild(h);
-    }
-
-    let lastGroup = null;
+  function tokenGroups(scope) {
+    const groups = [];
+    let current = null;
     for (const t of scope.tokens) {
-      if (t.group && t.group !== lastGroup) {
-        lastGroup = t.group;
-        const h = document.createElement('h3');
-        h.className = 'control-group';
-        h.textContent = t.groupLabel || t.group;
-        controlsEl.appendChild(h);
+      const id = t.group || '_default';
+      if (!current || current.id !== id) {
+        current = {
+          id,
+          label: t.groupLabel || (id === '_default' ? '見た目' : id),
+          tokens: [],
+        };
+        groups.push(current);
       }
-      appendTokenControl(scope, t, values);
+      if (t.groupLabel) current.label = t.groupLabel;
+      current.tokens.push(t);
     }
+    return groups;
+  }
+
+  function appendGroupedControls(scope, parent, { openFirst = true } = {}) {
+    const values = scopeValues(scope.id);
+    const groups = tokenGroups(scope);
+    groups.forEach((g, i) => {
+      const details = document.createElement('details');
+      details.className = 'control-details';
+      if (openFirst && i === 0) details.open = true;
+      const summary = document.createElement('summary');
+      summary.textContent = g.label;
+      const body = document.createElement('div');
+      body.className = 'control-details-body';
+      details.append(summary, body);
+      for (const t of g.tokens) appendTokenControl(scope, t, values, body);
+      parent.appendChild(details);
+    });
   }
 
   function buildControls() {
@@ -368,13 +392,22 @@
     if (noteEl) noteEl.textContent = scope.note || '';
 
     if (isAllView()) {
-      for (const s of schema.scopes) {
-        appendScopeControls(s, { showScopeHeading: true });
-      }
+      schema.scopes.forEach((s, i) => {
+        const details = document.createElement('details');
+        details.className = 'control-details control-details--scope';
+        if (i === 0) details.open = true;
+        const summary = document.createElement('summary');
+        summary.textContent = s.label;
+        const body = document.createElement('div');
+        body.className = 'control-details-body';
+        details.append(summary, body);
+        appendGroupedControls(s, body, { openFirst: true });
+        controlsEl.appendChild(details);
+      });
       return;
     }
 
-    appendScopeControls(scope, { showScopeHeading: false });
+    appendGroupedControls(scope, controlsEl, { openFirst: true });
   }
 
   function syncControlsFromValues() {
