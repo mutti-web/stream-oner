@@ -470,11 +470,30 @@
       presetSelect.value = prev;
     }
     syncDeleteButton();
+    syncStyleHint();
   }
 
   function syncDeleteButton() {
     if (!btnDeleteLocal || !presetSelect) return;
     btnDeleteLocal.hidden = !String(presetSelect.value || '').startsWith('local:');
+  }
+
+  function syncStyleHint() {
+    const hint = document.getElementById('style-hint');
+    if (!hint || !presetSelect) return;
+    const val = presetSelect.value || '';
+    let text = '';
+    if (val.startsWith('builtin:')) {
+      const id = val.slice('builtin:'.length);
+      const found = builtinCatalog.find((p) => p.id === id);
+      text = found?.description || '';
+    } else if (val.startsWith('local:')) {
+      const id = val.slice('local:'.length);
+      const found = readLocalPresets().find((p) => p.id === id);
+      text = found?.description || 'このブラウザに保存したスタイル';
+    }
+    hint.textContent = text;
+    hint.hidden = !text;
   }
 
   function applyPresetObject(data) {
@@ -485,7 +504,7 @@
     }
     syncControlsFromValues();
     const extra = result.warnings.length ? `（注意: ${result.warnings.join(' / ')}）` : '';
-    setPresetStatus(`「${data.label || data.id || 'プリセット'}」を適用しました${extra}`);
+    setPresetStatus(`「${data.label || data.id || 'スタイル'}」を適用しました${extra}`);
     return true;
   }
 
@@ -507,19 +526,19 @@
         const id = val.slice('local:'.length);
         const found = readLocalPresets().find((p) => p.id === id);
         if (!found) {
-          setPresetStatus('ローカルプリセットが見つかりません', true);
+          setPresetStatus('保存したスタイルが見つかりません', true);
           return;
         }
         applyPresetObject(found);
       }
     } catch (e) {
       console.error(e);
-      setPresetStatus('プリセットの読み込みに失敗しました', true);
+      setPresetStatus('スタイルの読み込みに失敗しました', true);
     }
   }
 
   function saveLocalPreset() {
-    const label = window.prompt('プリセット名', `マイ設定 ${new Date().toLocaleDateString('ja-JP')}`);
+    const label = window.prompt('スタイル名', `マイスタイル ${new Date().toLocaleDateString('ja-JP')}`);
     if (!label) return;
     const id = `local-${Date.now().toString(36)}`;
     const data = schema.exportPresetData(valuesByScope, { id, label, description: 'ブラウザ保存' });
@@ -539,7 +558,7 @@
     const list = readLocalPresets().filter((p) => p.id !== id);
     writeLocalPresets(list);
     refreshPresetSelect();
-    setPresetStatus('ローカルプリセットを削除しました');
+    setPresetStatus('保存したスタイルを削除しました');
   }
 
   function exportPresetJson() {
@@ -555,7 +574,7 @@
     a.download = 'stream-oner-preset.json';
     a.click();
     URL.revokeObjectURL(url);
-    setPresetStatus('プリセット JSON を書き出しました');
+    setPresetStatus('スタイル JSON を書き出しました');
   }
 
   function importPresetJson(file) {
@@ -584,8 +603,12 @@
     } catch (e) {
       console.error(e);
       builtinCatalog = [
-        { id: 'mobile-readable', label: 'スマホ読みやすめ' },
-        { id: 'discord-calm', label: '落ち着いた発話' },
+        { id: 'sukkiri', label: 'すっきり' },
+        { id: 'hakkiri', label: 'はっきり' },
+        { id: 'attaka', label: 'あったか' },
+        { id: 'kawaii', label: 'かわいい' },
+        { id: 'simple', label: 'しんぷる' },
+        { id: 'hinyari', label: 'ひんやり' },
       ];
     }
     refreshPresetSelect();
@@ -619,7 +642,10 @@
   document.getElementById('btn-preset-save-local')?.addEventListener('click', saveLocalPreset);
   document.getElementById('btn-preset-export')?.addEventListener('click', exportPresetJson);
   document.getElementById('btn-preset-delete-local')?.addEventListener('click', deleteSelectedLocalPreset);
-  presetSelect?.addEventListener('change', syncDeleteButton);
+  presetSelect?.addEventListener('change', () => {
+    syncDeleteButton();
+    syncStyleHint();
+  });
 
   const fileInput = document.getElementById('preset-file');
   document.getElementById('btn-preset-import')?.addEventListener('click', () => fileInput?.click());

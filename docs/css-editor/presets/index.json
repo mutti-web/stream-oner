@@ -3,16 +3,40 @@
   "presetFormat": 1,
   "presets": [
     {
-      "id": "mobile-readable",
-      "label": "スマホ読みやすめ",
-      "description": "約6インチ視聴向け。YouTube チャットの文字を大きめに。",
-      "scopes": ["youtube"]
+      "id": "sukkiri",
+      "label": "すっきり",
+      "description": "気配だけ。極小・ほぼ透明・タイト余白。",
+      "scopes": ["youtube", "discord"]
     },
     {
-      "id": "discord-calm",
-      "label": "落ち着いた発話",
-      "description": "Discord の発話リングを抑えめに。",
-      "scopes": ["discord"]
+      "id": "hakkiri",
+      "label": "はっきり",
+      "description": "読み取り優先。中〜やや大の文字＋濃背景・高コントラスト。",
+      "scopes": ["youtube", "discord"]
+    },
+    {
+      "id": "attaka",
+      "label": "あったか",
+      "description": "やさしい囲い。中くらいの丸みと暖色のコク。",
+      "scopes": ["youtube", "discord"]
+    },
+    {
+      "id": "kawaii",
+      "label": "かわいい",
+      "description": "おもちゃ感。丸ゴ・超角丸・パステル。",
+      "scopes": ["youtube", "discord"]
+    },
+    {
+      "id": "simple",
+      "label": "しんぷる",
+      "description": "書類感。直角・白黒・装飾なし。",
+      "scopes": ["youtube", "discord"]
+    },
+    {
+      "id": "hinyari",
+      "label": "ひんやり",
+      "description": "UIガラス。寒色・半透明・シャープ。",
+      "scopes": ["youtube", "discord"]
     }
   ]
 }

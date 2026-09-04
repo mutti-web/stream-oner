@@ -11,28 +11,23 @@
   <header class="app-header">
     <div>
       <h1>StreamONER CSS エディタ</h1>
-      <p class="sub">見た目を調整 → CSS をダウンロード → Suite のカスタム CSS に指定</p>
+      <p class="sub">スタイルを選ぶ → 色などを調整 → CSS をダウンロード → Suite に指定</p>
     </div>
     <a href="../">公式サイトへ</a>
   </header>
 
   <main class="layout">
-    <section class="panel panel-sidebar" aria-labelledby="controls-title">
-      <h2 id="controls-title">見た目</h2>
-      <div id="scope-tabs" class="scope-tabs" role="tablist" aria-label="対象オーバーレイ"></div>
-      <p class="scope-note-line" id="scope-note"></p>
-
-      <div id="controls" class="controls controls-scroll"></div>
-
-      <div class="sidebar-footer">
+    <section class="panel panel-sidebar" aria-labelledby="style-title">
+      <div class="style-block">
+        <h2 id="style-title">スタイル</h2>
         <div class="preset-panel">
           <div class="preset-row">
-            <label class="preset-label" for="preset-select">プリセット</label>
-            <select id="preset-select" class="preset-select" aria-label="プリセットを選択"></select>
+            <select id="preset-select" class="preset-select" aria-label="スタイルを選択"></select>
             <button type="button" id="btn-preset-apply" class="primary-soft">適用</button>
           </div>
+          <p class="hint style-hint" id="style-hint" hidden></p>
           <details class="preset-manage">
-            <summary>プリセット管理</summary>
+            <summary>スタイル管理</summary>
             <div class="preset-manage-body">
               <button type="button" id="btn-preset-save-local">ブラウザに保存</button>
               <button type="button" id="btn-preset-export">JSON 書き出し</button>
@@ -43,6 +38,15 @@
           </details>
           <p class="hint" id="preset-status" aria-live="polite"></p>
         </div>
+      </div>
+
+      <h2 id="controls-title">見た目</h2>
+      <div id="scope-tabs" class="scope-tabs" role="tablist" aria-label="対象オーバーレイ"></div>
+      <p class="scope-note-line" id="scope-note"></p>
+
+      <div id="controls" class="controls controls-scroll"></div>
+
+      <div class="sidebar-footer">
         <div class="actions">
           <button type="button" class="primary" id="btn-download">CSS をダウンロード</button>
           <button type="button" id="btn-reset">既定に戻す</button>
@@ -212,7 +216,7 @@
       公開 URL: <a href="https://streamoner.mutti.xyz/css-editor/">https://streamoner.mutti.xyz/css-editor/</a>
       · レイアウトは Suite 本体のまま
       · スキーマ v<span id="schema-version">?</span>
-      · プリセット形式 v<span id="preset-format">?</span>
+      · スタイル形式 v<span id="preset-format">?</span>
     </p>
   </footer>
 

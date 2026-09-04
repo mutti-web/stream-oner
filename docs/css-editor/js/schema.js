@@ -433,10 +433,10 @@
   function applyPresetData(valuesByScope, data) {
     const warnings = [];
     if (!data || typeof data !== 'object') {
-      return { ok: false, warnings: ['無効なプリセットです'] };
+      return { ok: false, warnings: ['無効なスタイルです'] };
     }
     if (data.schemaVersion != null && Number(data.schemaVersion) > SCHEMA_VERSION) {
-      warnings.push(`プリセットの schemaVersion (${data.schemaVersion}) がエディタ (${SCHEMA_VERSION}) より新しいです`);
+      warnings.push(`スタイルの schemaVersion (${data.schemaVersion}) がエディタ (${SCHEMA_VERSION}) より新しいです`);
     }
 
     const pickKnown = (scopeId, src) => {

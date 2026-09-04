@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "schemaVersion": 3,
+  "id": "sukkiri",
+  "label": "すっきり",
+  "description": "気配だけ。極小・ほぼ透明・タイト余白。",
+  "scopes": {
+    "youtube": {
+      "--font-size": "12px",
+      "--font-family": "'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif",
+      "--bg-color": "rgba(0, 0, 0, 0.22)",
+      "--text-color": "#e8e8e8",
+      "--username-color": "#c5d4de",
+      "--superchat-color": "#d4c48a",
+      "--owner-color": "#d4a8a8",
+      "--moderator-color": "#a8c9b4",
+      "--member-color": "#b0b8d4",
+      "--first-color": "#7aab98",
+      "--regular-color": "#c4a878",
+      "--badge-font-size": "0.55em",
+      "--badge-padding": "1px 4px",
+      "--badge-radius": "2px",
+      "--badge-text-dark": "#1a1a1a",
+      "--badge-text-light": "#ffffff",
+      "--border-radius": "3px",
+      "--padding": "4px 8px",
+      "--avatar-size": "16px"
+    },
+    "discord": {
+      "--speaking-color": "#4a9b6e",
+      "--speaking-glow": "rgba(35, 165, 90, 0.12)",
+      "--overlay-bg": "rgba(18, 18, 24, 0.28)",
+      "--text-normal": "rgba(255, 255, 255, 0.55)",
+      "--text-speaking": "#f0f0f0",
+      "--name-bg": "rgba(0, 0, 0, 0.18)",
+      "--name-bg-speaking": "rgba(35, 165, 90, 0.12)",
+      "--avatar-size": "26px",
+      "--font": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+      "--name-font-size": "11px",
+      "--radius": "4px",
+      "--name-radius": "2px",
+      "--list-gap": "0px"
+    }
+  }
+}

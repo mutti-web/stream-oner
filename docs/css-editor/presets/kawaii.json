@@ -1,0 +1,45 @@
+{
+  "format": 1,
+  "schemaVersion": 3,
+  "id": "kawaii",
+  "label": "かわいい",
+  "description": "おもちゃ感。丸ゴ・超角丸・パステル。",
+  "scopes": {
+    "youtube": {
+      "--font-size": "17px",
+      "--font-family": "'Hiragino Maru Gothic ProN', 'M PLUS Rounded 1c', 'Yu Gothic UI', sans-serif",
+      "--bg-color": "rgba(72, 28, 56, 0.58)",
+      "--text-color": "#fff1f7",
+      "--username-color": "#fda4d0",
+      "--superchat-color": "#f9a8d4",
+      "--owner-color": "#fb9ab0",
+      "--moderator-color": "#d8b4fe",
+      "--member-color": "#f0abfc",
+      "--first-color": "#f472b6",
+      "--regular-color": "#fb7185",
+      "--badge-font-size": "0.75em",
+      "--badge-padding": "2px 9px",
+      "--badge-radius": "12px",
+      "--badge-text-dark": "#3b1028",
+      "--badge-text-light": "#ffffff",
+      "--border-radius": "22px",
+      "--padding": "9px 14px",
+      "--avatar-size": "28px"
+    },
+    "discord": {
+      "--speaking-color": "#f9a8d4",
+      "--speaking-glow": "rgba(249, 168, 212, 0.5)",
+      "--overlay-bg": "rgba(72, 28, 56, 0.62)",
+      "--text-normal": "rgba(255, 241, 247, 0.85)",
+      "--text-speaking": "#fff1f7",
+      "--name-bg": "rgba(255, 255, 255, 0.12)",
+      "--name-bg-speaking": "rgba(249, 168, 212, 0.35)",
+      "--avatar-size": "50px",
+      "--font": "'Hiragino Maru Gothic ProN', 'M PLUS Rounded 1c', 'Yu Gothic UI', sans-serif",
+      "--name-font-size": "15px",
+      "--radius": "24px",
+      "--name-radius": "16px",
+      "--list-gap": "8px"
+    }
+  }
+}

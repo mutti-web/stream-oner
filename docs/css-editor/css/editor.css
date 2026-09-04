@@ -97,6 +97,27 @@ a { color: var(--ed-accent); }
   font-size: 1rem;
 }
 
+.style-block {
+  flex-shrink: 0;
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ed-border);
+}
+
+.style-block h2 {
+  margin-bottom: 8px;
+}
+
+.style-hint {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  color: var(--ed-muted);
+}
+
+.style-hint:not([hidden]):empty {
+  display: none;
+}
+
 .scope-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -294,7 +315,7 @@ a { color: var(--ed-accent); }
 }
 
 .preset-panel {
-  margin: 0 0 10px;
+  margin: 0;
   padding: 0;
   border: none;
   border-radius: 0;
