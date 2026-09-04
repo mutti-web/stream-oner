@@ -50,22 +50,12 @@ a { color: var(--ed-accent); }
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(300px, 360px) 1fr;
+  grid-template-columns: 1fr;
   gap: 0;
-  align-items: stretch;
+  align-items: start;
   max-width: none;
   margin: 0;
-  min-height: calc(100vh - var(--ed-header-h));
-}
-
-@media (max-width: 860px) {
-  .layout { grid-template-columns: 1fr; }
-  .panel-sidebar {
-    position: static;
-    max-height: none;
-    border-right: none;
-    border-bottom: 1px solid var(--ed-border);
-  }
+  min-height: 0;
 }
 
 .panel {
@@ -78,18 +68,24 @@ a { color: var(--ed-accent); }
 .panel-sidebar {
   display: flex;
   flex-direction: column;
-  position: sticky;
-  top: 0;
-  max-height: 100vh;
+  position: static;
+  top: auto;
+  max-height: none;
+  height: auto;
+  overflow: visible;
   padding: 16px 16px 0;
-  border-right: 1px solid var(--ed-border);
-  overflow: hidden;
+  border-right: none;
+  border-bottom: 1px solid var(--ed-border);
   background: var(--ed-surface);
+  z-index: auto;
 }
 
 .panel-preview {
   padding: 16px 24px 24px;
   min-width: 0;
+  position: relative;
+  z-index: 0;
+  background: var(--ed-surface);
 }
 
 .panel h2 {
@@ -156,14 +152,72 @@ a { color: var(--ed-accent); }
 }
 
 .controls-scroll {
-  flex: 1;
+  flex: none;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 0;
   padding-right: 2px;
   margin-bottom: 0;
+}
+
+/* 本物のデスクトップポインタ環境だけ sticky（タッチ幅では絶対に使わない） */
+@media (min-width: 861px) and (hover: hover) and (pointer: fine) {
+  .layout {
+    grid-template-columns: minmax(300px, 360px) 1fr;
+    align-items: start;
+    min-height: calc(100vh - var(--ed-header-h));
+  }
+
+  .panel-sidebar {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow: hidden;
+    border-right: 1px solid var(--ed-border);
+    border-bottom: none;
+    z-index: 2;
+  }
+
+  .controls-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .panel-preview {
+    z-index: 0;
+  }
+}
+
+/* 狭い画面は sticky を強制オフ（キャッシュや古い規則の残り対策） */
+@media (max-width: 860px) {
+  .panel-sidebar {
+    position: static !important;
+    top: auto !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    z-index: auto !important;
+  }
+
+  .controls-scroll {
+    flex: none !important;
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  .sidebar-footer {
+    position: static !important;
+  }
+
+  .panel-preview,
+  .preview-wrap,
+  .preview-stage {
+    position: relative;
+    z-index: 0;
+  }
 }
 
 /* 折りたたみは枠なし。区切り線のみ */
