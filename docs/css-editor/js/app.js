@@ -50,7 +50,16 @@
 
   function buildControls() {
     controlsEl.replaceChildren();
+    let lastGroup = null;
     for (const t of schema.tokens) {
+      if (t.group && t.group !== lastGroup) {
+        lastGroup = t.group;
+        const h = document.createElement('h3');
+        h.className = 'control-group';
+        h.textContent = t.groupLabel || t.group;
+        controlsEl.appendChild(h);
+      }
+
       const wrap = document.createElement('div');
       wrap.className = 'control';
       wrap.dataset.token = t.id;

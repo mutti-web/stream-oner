@@ -23,6 +23,14 @@
       --superchat-color:    #fbbf24;
       --owner-color:        #f87171;
       --moderator-color:    #86efac;
+      --member-color:       #818cf8;
+      --first-color:        #10b981;
+      --regular-color:      #f59e0b;
+      --badge-font-size:    0.65em;
+      --badge-padding:      1px 5px;
+      --badge-radius:       4px;
+      --badge-text-dark:    #1a1a1a;
+      --badge-text-light:   #ffffff;
       --border-radius:      8px;
       --padding:            6px 10px;
       --avatar-size:        22px;
@@ -104,14 +112,14 @@
     }
 
     .badge {
-      font-size: 0.65em; font-weight: 700;
-      padding: 1px 5px; border-radius: 4px; flex-shrink: 0;
+      font-size: var(--badge-font-size); font-weight: 700;
+      padding: var(--badge-padding); border-radius: var(--badge-radius); flex-shrink: 0;
     }
-    .badge-owner     { background: var(--owner-color);     color: #1a1a1a; }
-    .badge-moderator { background: var(--moderator-color); color: #1a1a1a; }
-    .badge-member    { background: #818cf8; color: #1a1a1a; }
-    .badge-first     { background: #10b981; color: #fff; }
-    .badge-regular   { background: #f59e0b; color: #1a1a1a; }
+    .badge-owner     { background: var(--owner-color);     color: var(--badge-text-dark); }
+    .badge-moderator { background: var(--moderator-color); color: var(--badge-text-dark); }
+    .badge-member    { background: var(--member-color);    color: var(--badge-text-dark); }
+    .badge-first     { background: var(--first-color);     color: var(--badge-text-light); }
+    .badge-regular   { background: var(--regular-color);   color: var(--badge-text-dark); }
 
     .msg-text { font-size: var(--font-size); color: var(--text-color); }
     .msg-text.emoji-only {
@@ -148,8 +156,8 @@
       font-family: var(--font-family);
       font-size: 0.9em;
       font-weight: 700;
-      color: #fff;
-      background: linear-gradient(90deg, rgba(129, 140, 248, 0.92), rgba(167, 139, 250, 0.88));
+      color: var(--badge-text-light);
+      background: var(--member-color);
       padding: 10px 14px;
       border-radius: 8px;
       margin-bottom: 6px;
