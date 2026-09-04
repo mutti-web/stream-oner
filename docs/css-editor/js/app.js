@@ -7,14 +7,23 @@
 
   const valuesByScope = schema.defaultsByScope();
   let activeScopeId = schema.scopes[0].id;
+  let builtinCatalog = [];
+
+  const LOCAL_PRESET_KEY = 'streamoner-css-editor-local-presets-v1';
 
   const controlsEl = document.getElementById('controls');
   const noteEl = document.getElementById('scope-note');
   const tabsEl = document.getElementById('scope-tabs');
   const phoneToggle = document.getElementById('phone-preview');
   const stageEl = document.getElementById('preview-stage');
-  const btnPreset = document.getElementById('btn-preset-mobile');
+  const presetSelect = document.getElementById('preset-select');
+  const presetStatus = document.getElementById('preset-status');
+  const btnDeleteLocal = document.getElementById('btn-preset-delete-local');
 
+  const verEl = document.getElementById('schema-version');
+  const fmtEl = document.getElementById('preset-format');
+  if (verEl) verEl.textContent = String(schema.version);
+  if (fmtEl) fmtEl.textContent = String(schema.presetFormat || 1);
   function activeScope() {
     return schema.getScope(activeScopeId);
   }
@@ -70,6 +79,68 @@
   function setValue(cssVar, value) {
     activeValues()[cssVar] = value;
     applyPreview(activeScopeId);
+    refreshCssSnippet();
+  }
+
+  function refreshCssSnippet() {
+    const out = document.getElementById('css-snippet-out');
+    if (out) out.textContent = schema.exportCss(valuesByScope);
+  }
+
+  function syncPreviewTools() {
+    document.querySelectorAll('.preview-tool-set').forEach((el) => {
+      el.hidden = el.dataset.for !== activeScopeId;
+    });
+  }
+
+  function applyChatKindFilters() {
+    const root = document.getElementById('chat-preview');
+    if (!root) return;
+    root.querySelectorAll('.chat-item[data-kind]').forEach((item) => {
+      const kind = item.dataset.kind;
+      const cb = document.querySelector(`[data-kind-filter="${kind}"]`);
+      item.hidden = !!(cb && !cb.checked);
+    });
+  }
+
+  function setDiscordSpeaking(card, on) {
+    if (!card) return;
+    card.classList.toggle('speaking', on);
+    card.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  function applyDiscordSpeakingDemo() {
+    const demo = document.getElementById('dc-speaking-demo');
+    const card = document.querySelector('[data-demo-speaker]');
+    if (!card) return;
+    setDiscordSpeaking(card, !!(demo && demo.checked));
+  }
+
+  function bindPreviewExtras() {
+    document.querySelectorAll('[data-kind-filter]').forEach((cb) => {
+      cb.addEventListener('change', applyChatKindFilters);
+    });
+
+    const speakingDemo = document.getElementById('dc-speaking-demo');
+    speakingDemo?.addEventListener('change', applyDiscordSpeakingDemo);
+
+    document.querySelectorAll('#discord-preview .dc-card').forEach((card) => {
+      const toggle = () => {
+        const next = !card.classList.contains('speaking');
+        setDiscordSpeaking(card, next);
+        if (card.hasAttribute('data-demo-speaker')) {
+          const demo = document.getElementById('dc-speaking-demo');
+          if (demo) demo.checked = next;
+        }
+      };
+      card.addEventListener('click', toggle);
+      card.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          toggle();
+        }
+      });
+    });
   }
 
   function buildTabs() {
@@ -93,21 +164,11 @@
       const el = previewRoot(s);
       if (el) el.hidden = s.id !== id;
     }
-    if (btnPreset) {
-      btnPreset.hidden = id !== 'youtube';
+    if (phoneToggle && id !== 'youtube') {
+      phoneToggle.checked = false;
+      stageEl?.classList.remove('is-phone');
     }
-    const btnDiscordPreset = document.getElementById('btn-preset-discord');
-    if (btnDiscordPreset) {
-      btnDiscordPreset.hidden = id !== 'discord';
-    }
-    if (phoneToggle) {
-      const wrap = phoneToggle.closest('label');
-      if (wrap) wrap.hidden = id !== 'youtube';
-      if (id !== 'youtube') {
-        phoneToggle.checked = false;
-        stageEl?.classList.remove('is-phone');
-      }
-    }
+    syncPreviewTools();
     syncControlsFromValues();
   }
 
@@ -216,20 +277,182 @@
   function syncControlsFromValues() {
     buildControls();
     applyAllPreviews();
+    applyChatKindFilters();
+    applyDiscordSpeakingDemo();
+    refreshCssSnippet();
   }
 
-  async function loadPreset(name) {
-    const res = await fetch(`./presets/${name}.json`, { cache: 'no-store' });
-    if (!res.ok) throw new Error('preset load failed');
-    const data = await res.json();
-    if (data.scopes) {
-      for (const [sid, vals] of Object.entries(data.scopes)) {
-        if (valuesByScope[sid]) Object.assign(valuesByScope[sid], vals);
+  function setPresetStatus(msg, isErr) {
+    if (!presetStatus) return;
+    presetStatus.textContent = msg || '';
+    presetStatus.classList.toggle('is-err', !!isErr);
+  }
+
+  function readLocalPresets() {
+    try {
+      const raw = localStorage.getItem(LOCAL_PRESET_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeLocalPresets(list) {
+    localStorage.setItem(LOCAL_PRESET_KEY, JSON.stringify(list));
+  }
+
+  function refreshPresetSelect() {
+    if (!presetSelect) return;
+    const prev = presetSelect.value;
+    presetSelect.replaceChildren();
+
+    const gBuiltin = document.createElement('optgroup');
+    gBuiltin.label = '組み込み';
+    for (const p of builtinCatalog) {
+      const o = document.createElement('option');
+      o.value = `builtin:${p.id}`;
+      o.textContent = p.label || p.id;
+      gBuiltin.appendChild(o);
+    }
+    presetSelect.appendChild(gBuiltin);
+
+    const locals = readLocalPresets();
+    if (locals.length) {
+      const gLocal = document.createElement('optgroup');
+      gLocal.label = 'このブラウザに保存';
+      for (const p of locals) {
+        const o = document.createElement('option');
+        o.value = `local:${p.id}`;
+        o.textContent = p.label || p.id;
+        gLocal.appendChild(o);
       }
-    } else if (data.values) {
-      Object.assign(valuesByScope.youtube, data.values);
+      presetSelect.appendChild(gLocal);
+    }
+
+    if (prev && [...presetSelect.options].some((o) => o.value === prev)) {
+      presetSelect.value = prev;
+    }
+    syncDeleteButton();
+  }
+
+  function syncDeleteButton() {
+    if (!btnDeleteLocal || !presetSelect) return;
+    btnDeleteLocal.hidden = !String(presetSelect.value || '').startsWith('local:');
+  }
+
+  function applyPresetObject(data) {
+    const result = schema.applyPresetData(valuesByScope, data);
+    if (!result.ok) {
+      setPresetStatus(result.warnings.join(' / ') || '適用に失敗しました', true);
+      return false;
     }
     syncControlsFromValues();
+    const extra = result.warnings.length ? `（注意: ${result.warnings.join(' / ')}）` : '';
+    setPresetStatus(`「${data.label || data.id || 'プリセット'}」を適用しました${extra}`);
+    return true;
+  }
+
+  async function loadBuiltinPreset(id) {
+    const res = await fetch(`./presets/${id}.json`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('preset load failed');
+    return res.json();
+  }
+
+  async function applySelectedPreset() {
+    const val = presetSelect?.value || '';
+    if (!val) return;
+    try {
+      if (val.startsWith('builtin:')) {
+        const id = val.slice('builtin:'.length);
+        const data = await loadBuiltinPreset(id);
+        applyPresetObject(data);
+      } else if (val.startsWith('local:')) {
+        const id = val.slice('local:'.length);
+        const found = readLocalPresets().find((p) => p.id === id);
+        if (!found) {
+          setPresetStatus('ローカルプリセットが見つかりません', true);
+          return;
+        }
+        applyPresetObject(found);
+      }
+    } catch (e) {
+      console.error(e);
+      setPresetStatus('プリセットの読み込みに失敗しました', true);
+    }
+  }
+
+  function saveLocalPreset() {
+    const label = window.prompt('プリセット名', `マイ設定 ${new Date().toLocaleDateString('ja-JP')}`);
+    if (!label) return;
+    const id = `local-${Date.now().toString(36)}`;
+    const data = schema.exportPresetData(valuesByScope, { id, label, description: 'ブラウザ保存' });
+    const list = readLocalPresets();
+    list.push(data);
+    writeLocalPresets(list);
+    refreshPresetSelect();
+    presetSelect.value = `local:${id}`;
+    syncDeleteButton();
+    setPresetStatus(`「${label}」をこのブラウザに保存しました`);
+  }
+
+  function deleteSelectedLocalPreset() {
+    const val = presetSelect?.value || '';
+    if (!val.startsWith('local:')) return;
+    const id = val.slice('local:'.length);
+    const list = readLocalPresets().filter((p) => p.id !== id);
+    writeLocalPresets(list);
+    refreshPresetSelect();
+    setPresetStatus('ローカルプリセットを削除しました');
+  }
+
+  function exportPresetJson() {
+    const data = schema.exportPresetData(valuesByScope, {
+      id: 'custom-export',
+      label: 'エクスポート',
+      description: 'StreamONER CSS Editor',
+    });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'stream-oner-preset.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    setPresetStatus('プリセット JSON を書き出しました');
+  }
+
+  function importPresetJson(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(String(reader.result || ''));
+        if (applyPresetObject(data)) {
+          // optionally offer to save — skip
+        }
+      } catch (e) {
+        console.error(e);
+        setPresetStatus('JSON の解析に失敗しました', true);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  async function initPresetCatalog() {
+    try {
+      const res = await fetch('./presets/index.json', { cache: 'no-store' });
+      if (res.ok) {
+        const catalog = await res.json();
+        builtinCatalog = Array.isArray(catalog.presets) ? catalog.presets : [];
+      }
+    } catch (e) {
+      console.error(e);
+      builtinCatalog = [
+        { id: 'mobile-readable', label: 'スマホ読みやすめ' },
+        { id: 'discord-calm', label: '落ち着いた発話' },
+      ];
+    }
+    refreshPresetSelect();
   }
 
   function downloadCss() {
@@ -249,6 +472,7 @@
       Object.assign(valuesByScope[id], fresh[id]);
     }
     syncControlsFromValues();
+    setPresetStatus('既定値に戻しました');
   }
 
   phoneToggle?.addEventListener('change', () => {
@@ -257,19 +481,23 @@
 
   document.getElementById('btn-download')?.addEventListener('click', downloadCss);
   document.getElementById('btn-reset')?.addEventListener('click', resetDefaults);
-  btnPreset?.addEventListener('click', () => {
-    loadPreset('mobile-readable').catch((e) => {
-      console.error(e);
-      alert('プリセットの読み込みに失敗しました');
-    });
+  document.getElementById('btn-preset-apply')?.addEventListener('click', () => {
+    applySelectedPreset();
   });
-  document.getElementById('btn-preset-discord')?.addEventListener('click', () => {
-    loadPreset('discord-calm').catch((e) => {
-      console.error(e);
-      alert('プリセットの読み込みに失敗しました');
-    });
+  document.getElementById('btn-preset-save-local')?.addEventListener('click', saveLocalPreset);
+  document.getElementById('btn-preset-export')?.addEventListener('click', exportPresetJson);
+  document.getElementById('btn-preset-delete-local')?.addEventListener('click', deleteSelectedLocalPreset);
+  presetSelect?.addEventListener('change', syncDeleteButton);
+
+  const fileInput = document.getElementById('preset-file');
+  document.getElementById('btn-preset-import')?.addEventListener('click', () => fileInput?.click());
+  fileInput?.addEventListener('change', () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (file) importPresetJson(file);
+    fileInput.value = '';
   });
 
+  bindPreviewExtras();
   buildTabs();
-  setActiveScope(activeScopeId);
+  initPresetCatalog().then(() => setActiveScope(activeScopeId));
 })();

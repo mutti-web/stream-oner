@@ -1,4 +1,6 @@
 {
+  "format": 1,
+  "schemaVersion": 3,
   "id": "discord-calm",
   "label": "落ち着いた発話",
   "description": "発話リングを抑えめに。",

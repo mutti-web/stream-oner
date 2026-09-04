@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 3,
+  "presetFormat": 1,
+  "presets": [
+    {
+      "id": "mobile-readable",
+      "label": "スマホ読みやすめ",
+      "description": "約6インチ視聴向け。YouTube チャットの文字を大きめに。",
+      "scopes": ["youtube"]
+    },
+    {
+      "id": "discord-calm",
+      "label": "落ち着いた発話",
+      "description": "Discord の発話リングを抑えめに。",
+      "scopes": ["discord"]
+    }
+  ]
+}

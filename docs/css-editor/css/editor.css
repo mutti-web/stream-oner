@@ -171,6 +171,45 @@ a { color: var(--ed-accent); }
   margin-top: 4px;
 }
 
+.preset-panel {
+  margin: 4px 0 12px;
+  padding: 12px;
+  border: 1px solid var(--ed-border);
+  border-radius: 8px;
+  background: var(--ed-bg);
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.preset-row + .preset-row {
+  margin-top: 8px;
+}
+
+.preset-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.preset-select {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 10px;
+  border: 1px solid var(--ed-border);
+  border-radius: 6px;
+  font: inherit;
+  background: var(--ed-surface);
+}
+
+.preset-actions button {
+  font-size: 0.85rem;
+  padding: 6px 10px;
+}
+
 button {
   font: inherit;
   cursor: pointer;
@@ -179,6 +218,10 @@ button {
   background: var(--ed-surface);
   color: var(--ed-text);
   padding: 8px 12px;
+}
+
+.hint.is-err {
+  color: #b42318;
 }
 
 button.primary {
@@ -196,6 +239,55 @@ button.primary:hover { filter: brightness(1.05); }
   gap: 8px;
   font-size: 0.9rem;
   color: var(--ed-muted);
+}
+
+.preview-tools {
+  margin-bottom: 10px;
+}
+
+.preview-tool-set {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.tool-sep {
+  width: 1px;
+  height: 1.1em;
+  background: var(--ed-border);
+}
+
+.tool-hint {
+  font-size: 0.8rem;
+  color: var(--ed-muted);
+}
+
+.css-snippet {
+  margin-top: 12px;
+  border: 1px solid var(--ed-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--ed-bg);
+}
+
+.css-snippet summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--ed-muted);
+}
+
+.css-snippet-out {
+  margin: 10px 0 4px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 6px;
+  background: #1e1e22;
+  color: #e8e8ec;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 .preview-wrap {
@@ -351,6 +443,12 @@ button.primary:hover { filter: brightness(1.05); }
   background: var(--overlay-bg);
   border: 2px solid transparent;
   border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.dc-card:focus-visible {
+  outline: 2px solid var(--ed-accent);
+  outline-offset: 2px;
 }
 
 .dc-card.speaking {

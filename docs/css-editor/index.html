@@ -21,10 +21,23 @@
       <h2 id="controls-title">見た目</h2>
       <div id="scope-tabs" class="scope-tabs" role="tablist" aria-label="対象オーバーレイ"></div>
       <div id="controls" class="controls"></div>
+      <div class="preset-panel">
+        <div class="preset-row">
+          <label class="preset-label" for="preset-select">プリセット</label>
+          <select id="preset-select" class="preset-select" aria-label="プリセットを選択"></select>
+          <button type="button" id="btn-preset-apply">適用</button>
+        </div>
+        <div class="preset-row preset-actions">
+          <button type="button" id="btn-preset-save-local">ブラウザに保存</button>
+          <button type="button" id="btn-preset-export">プリセット JSON を書き出し</button>
+          <button type="button" id="btn-preset-import">プリセット JSON を読み込み</button>
+          <button type="button" id="btn-preset-delete-local" hidden>選択を削除</button>
+          <input type="file" id="preset-file" accept="application/json,.json" hidden />
+        </div>
+        <p class="hint" id="preset-status" aria-live="polite"></p>
+      </div>
       <div class="actions">
         <button type="button" class="primary" id="btn-download">CSS をダウンロード</button>
-        <button type="button" id="btn-preset-mobile">プリセット: スマホ読みやすめ</button>
-        <button type="button" id="btn-preset-discord" hidden>プリセット: 落ち着いた発話</button>
         <button type="button" id="btn-reset">既定に戻す</button>
       </div>
       <p class="note" id="scope-note"></p>
@@ -32,14 +45,32 @@
 
     <section class="panel" aria-labelledby="preview-title">
       <h2 id="preview-title">プレビュー</h2>
-      <label class="toggle">
-        <input type="checkbox" id="phone-preview" />
-        スマホ相当の縮小プレビュー
-      </label>
+      <div id="preview-tools" class="preview-tools">
+        <div class="preview-tool-set" data-for="youtube">
+          <label class="toggle">
+            <input type="checkbox" id="phone-preview" />
+            スマホ相当の縮小
+          </label>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <label class="toggle"><input type="checkbox" data-kind-filter="first" checked /> 初見</label>
+          <label class="toggle"><input type="checkbox" data-kind-filter="regular" checked /> 常連</label>
+          <label class="toggle"><input type="checkbox" data-kind-filter="member" checked /> メンバー</label>
+          <label class="toggle"><input type="checkbox" data-kind-filter="mod" checked /> モデ</label>
+          <label class="toggle"><input type="checkbox" data-kind-filter="owner" checked /> 配信者</label>
+          <label class="toggle"><input type="checkbox" data-kind-filter="superchat" checked /> スパチャ</label>
+        </div>
+        <div class="preview-tool-set" data-for="discord" hidden>
+          <label class="toggle">
+            <input type="checkbox" id="dc-speaking-demo" checked />
+            発話デモ（Alice）
+          </label>
+          <span class="tool-hint">カードをクリックしても切替できます</span>
+        </div>
+      </div>
       <div class="preview-wrap">
         <div id="preview-stage" class="preview-stage">
           <div id="chat-preview" class="chat-preview" aria-label="ダミーコメント">
-            <div class="chat-item">
+            <div class="chat-item" data-kind="first">
               <div class="chat-avatar">A</div>
               <div class="chat-body">
                 <div class="chat-header">
@@ -49,7 +80,7 @@
                 <div class="chat-text">こんにちは！配信楽しみです</div>
               </div>
             </div>
-            <div class="chat-item">
+            <div class="chat-item" data-kind="regular">
               <div class="chat-avatar">B</div>
               <div class="chat-body">
                 <div class="chat-header">
@@ -59,7 +90,7 @@
                 <div class="chat-text">いつもありがとうございます</div>
               </div>
             </div>
-            <div class="chat-item">
+            <div class="chat-item" data-kind="member">
               <div class="chat-avatar">Me</div>
               <div class="chat-body">
                 <div class="chat-header">
@@ -69,7 +100,7 @@
                 <div class="chat-text">メンバーシップ加入中です</div>
               </div>
             </div>
-            <div class="chat-item">
+            <div class="chat-item" data-kind="mod">
               <div class="chat-avatar">M</div>
               <div class="chat-body">
                 <div class="chat-header">
@@ -79,7 +110,7 @@
                 <div class="chat-text">ルールを守って楽しもうね</div>
               </div>
             </div>
-            <div class="chat-item">
+            <div class="chat-item" data-kind="owner">
               <div class="chat-avatar">O</div>
               <div class="chat-body">
                 <div class="chat-header">
@@ -89,7 +120,7 @@
                 <div class="chat-text">今日も来てくれてありがとう！</div>
               </div>
             </div>
-            <div class="chat-item superchat">
+            <div class="chat-item superchat" data-kind="superchat">
               <div class="chat-avatar">S</div>
               <div class="chat-body">
                 <div class="chat-header">
@@ -103,15 +134,15 @@
 
           <div id="discord-preview" class="discord-preview" hidden aria-label="Discord VC ダミー">
             <div class="dc-user-list">
-              <div class="dc-card">
+              <div class="dc-card" data-dc-id="romu" tabindex="0" role="button" aria-pressed="false">
                 <div class="dc-avatar">R</div>
                 <div class="dc-name">romu</div>
               </div>
-              <div class="dc-card speaking">
+              <div class="dc-card speaking" data-dc-id="alice" data-demo-speaker tabindex="0" role="button" aria-pressed="true">
                 <div class="dc-avatar">A</div>
-                <div class="dc-name">Alice（発話中）</div>
+                <div class="dc-name">Alice</div>
               </div>
-              <div class="dc-card">
+              <div class="dc-card" data-dc-id="bob" tabindex="0" role="button" aria-pressed="false">
                 <div class="dc-avatar">B</div>
                 <div class="dc-name">Bob</div>
               </div>
@@ -119,6 +150,10 @@
           </div>
         </div>
       </div>
+      <details class="css-snippet">
+        <summary>出力 CSS のプレビュー</summary>
+        <pre id="css-snippet-out" class="css-snippet-out" aria-live="polite"></pre>
+      </details>
       <p class="note">
         ダウンロードした <code>stream-oner-custom.css</code> を Suite 設定の「カスタム CSS」にパス指定してください。
         Discord 変数は <code>#user-list</code> スコープで出力され、チャット側と衝突しません。反映まで数秒かかることがあります。
@@ -130,6 +165,8 @@
     <p>
       公開 URL: <a href="https://streamoner.mutti.xyz/css-editor/">https://streamoner.mutti.xyz/css-editor/</a>
       · レイアウトは Suite 本体のまま
+      · スキーマ v<span id="schema-version">?</span>
+      · プリセット形式 v<span id="preset-format">?</span>
     </p>
   </footer>
 
