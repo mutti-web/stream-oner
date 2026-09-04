@@ -316,9 +316,9 @@ button.primary:hover { filter: brightness(1.05); }
   --ed-preview-scale: 0.55;
 }
 
-/* Chat mock — mirrors youtube-overlay token names */
+/* Chat mock — mirrors youtube-overlay.html */
 .chat-preview {
-  --font-family: 'Segoe UI', 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif;
+  --font-family: 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif;
   --font-size: 14px;
   --bg-color: rgba(0, 0, 0, 0.75);
   --text-color: #f0f0f0;
@@ -349,46 +349,54 @@ button.primary:hover { filter: brightness(1.05); }
 
 .chat-item {
   display: flex;
-  gap: 8px;
   align-items: flex-start;
-  background: var(--bg-color);
-  color: var(--text-color);
-  border-radius: var(--border-radius);
+  gap: 8px;
   padding: var(--padding);
+  background: var(--bg-color);
+  border-radius: var(--border-radius);
+  font-family: var(--font-family);
   font-size: var(--font-size);
+  color: var(--text-color);
+  word-break: break-word;
+  line-height: 1.4;
 }
 
 .chat-item.superchat {
-  box-shadow: inset 0 0 0 2px var(--superchat-color);
+  border-left: 3px solid var(--superchat-color);
+  background: color-mix(in srgb, var(--superchat-color) 18%, transparent);
+  box-shadow: none;
 }
 
+/* 本体 youtube-overlay .avatar に合わせる（img 自体が --avatar-size） */
 .chat-avatar {
   width: var(--avatar-size);
   height: var(--avatar-size);
+  min-width: var(--avatar-size);
+  min-height: var(--avatar-size);
+  max-width: var(--avatar-size);
+  max-height: var(--avatar-size);
   border-radius: 50%;
-  background: #4b5563;
   flex-shrink: 0;
+  object-fit: cover;
+  background: #555;
+  display: block;
+}
+
+.chat-avatar--initial {
   display: grid;
   place-items: center;
   font-size: 0.7em;
   font-weight: 700;
   color: #fff;
-  overflow: hidden;
+  background: #555;
 }
 
-.chat-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.chat-body { min-width: 0; flex: 1; }
+.chat-body { flex: 1; min-width: 0; }
 
 .chat-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 2px;
 }
 
@@ -396,6 +404,10 @@ button.primary:hover { filter: brightness(1.05); }
   font-weight: 700;
   font-size: 0.85em;
   color: var(--username-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
 }
 
 .badge {
@@ -403,6 +415,7 @@ button.primary:hover { filter: brightness(1.05); }
   font-weight: 700;
   padding: var(--badge-padding);
   border-radius: var(--badge-radius);
+  flex-shrink: 0;
 }
 .badge-owner { background: var(--owner-color); color: var(--badge-text-dark); }
 .badge-moderator { background: var(--moderator-color); color: var(--badge-text-dark); }
@@ -410,7 +423,11 @@ button.primary:hover { filter: brightness(1.05); }
 .badge-first { background: var(--first-color); color: var(--badge-text-light); }
 .badge-regular { background: var(--regular-color); color: var(--badge-text-dark); }
 
-.chat-text { word-break: break-word; }
+.chat-text {
+  font-size: var(--font-size);
+  color: var(--text-color);
+  word-break: break-word;
+}
 
 .superchat-amount {
   margin-top: 3px;
@@ -419,7 +436,7 @@ button.primary:hover { filter: brightness(1.05); }
   color: var(--superchat-color);
 }
 
-/* Discord VC mock — mirrors discord-overlay.css token names */
+/* Discord VC mock — mirrors discord-overlay.css */
 .discord-preview {
   --speaking-color: #23a55a;
   --speaking-glow: rgba(35, 165, 90, 0.35);
@@ -434,13 +451,14 @@ button.primary:hover { filter: brightness(1.05); }
   --list-gap: 4px;
   --name-radius: 6px;
   --name-font-size: 14px;
-  width: 280px;
+  width: min(100%, 320px);
 }
 
 .dc-user-list {
   display: flex;
   flex-direction: column;
   gap: var(--list-gap);
+  padding: 4px;
 }
 
 .dc-card {
@@ -452,6 +470,7 @@ button.primary:hover { filter: brightness(1.05); }
   border: 2px solid transparent;
   border-radius: var(--radius);
   cursor: pointer;
+  transition: border-color 0.15s ease;
 }
 
 .dc-card:focus-visible {
@@ -463,25 +482,35 @@ button.primary:hover { filter: brightness(1.05); }
   border-color: var(--speaking-color);
 }
 
+/* 本体 discord-overlay.css .avatar に合わせる */
 .dc-avatar {
+  box-sizing: border-box;
   width: var(--avatar-size);
   height: var(--avatar-size);
+  min-width: var(--avatar-size);
+  min-height: var(--avatar-size);
+  max-width: var(--avatar-size);
+  max-height: var(--avatar-size);
   border-radius: 50%;
   border: 2px solid transparent;
   flex-shrink: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(88, 101, 242, 0.3);
   font-family: var(--font);
   font-weight: 800;
   font-size: 16px;
   color: #fff;
-  background: rgba(88, 101, 242, 0.3);
-  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .dc-avatar img {
   width: 100%;
   height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: cover;
   display: block;
   border-radius: 50%;
@@ -498,13 +527,13 @@ button.primary:hover { filter: brightness(1.05); }
   font-size: var(--name-font-size);
   font-weight: 600;
   color: var(--text-normal);
-  background: var(--name-bg);
-  padding: 2px 8px;
-  border-radius: var(--name-radius);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 180px;
+  background: var(--name-bg);
+  padding: 2px 8px;
+  border-radius: var(--name-radius);
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .dc-card.speaking .dc-name {
