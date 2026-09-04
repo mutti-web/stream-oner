@@ -190,6 +190,13 @@ async function applySuiteFeatures(feedbackId = 'general-fb') {
   return r;
 }
 
+const CSS_EDITOR_URL = 'https://streamoner.mutti.xyz/css-editor/';
+
+function openCssEditor(ev) {
+  ev?.preventDefault?.();
+  api.openExternal(CSS_EDITOR_URL);
+}
+
 function bindGeneralActions() {
   document.getElementById('browse-btn')?.addEventListener('click', async () => {
     const p = await api.openCssFileDialog();
@@ -202,6 +209,8 @@ function bindGeneralActions() {
     document.getElementById('css-path').value = '';
     await persistCustomCssSettings();
   });
+  document.getElementById('open-css-editor-btn')?.addEventListener('click', openCssEditor);
+  document.getElementById('open-css-editor-link')?.addEventListener('click', openCssEditor);
 
   document.getElementById('suite-combined-copy')?.addEventListener('click', () => {
     const url = readMdValue(document.getElementById('suite-combined-url'));

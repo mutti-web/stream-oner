@@ -231,22 +231,11 @@
     // ============================================================
     function applyConfig(config) {
       cfg = config;
-      const { style, display, animation } = config;
+      const { display, animation } = config;
       const root = document.documentElement;
 
-      if (style) {
-        root.style.setProperty('--font-family',     style.fontFamily      || "'Noto Sans JP', sans-serif");
-        root.style.setProperty('--font-size',       (style.fontSize || 14) + 'px');
-        root.style.setProperty('--bg-color',        style.backgroundColor || 'rgba(0,0,0,0.75)');
-        root.style.setProperty('--text-color',      style.textColor       || '#f0f0f0');
-        root.style.setProperty('--username-color',  style.usernameColor   || '#7dd3fc');
-        root.style.setProperty('--superchat-color', style.superChatColor  || '#fbbf24');
-        root.style.setProperty('--owner-color',     style.ownerColor      || '#f87171');
-        root.style.setProperty('--moderator-color', style.moderatorColor  || '#86efac');
-        root.style.setProperty('--border-radius',   (style.borderRadius || 8) + 'px');
-        root.style.setProperty('--padding',         style.padding         || '6px 10px');
-        root.style.setProperty('--avatar-size',     (style.avatarSize || 22) + 'px');
-      }
+      // 見た目トークン（--font-size / 色など）は HTML 既定 :root とカスタム CSS に任せる。
+      // JS でインライン設定すると custom-user-css が上書きできないため触らない。
       if (display) {
         root.style.setProperty('--width', (display.width || 400) + 'px');
         root.style.setProperty('--gap',   (display.gap   || 6)   + 'px');

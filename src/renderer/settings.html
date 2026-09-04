@@ -225,6 +225,10 @@
     <div class="app-section-title setup-scroll-target" id="sec-custom-css">カスタム CSS（OBS オーバーレイ）</div>
     <div class="info-box">
       Discord・チャット・アバターに共通適用。反映は数秒。
+      フォント・色などの見た目は
+      <a href="#" id="open-css-editor-link">CSS エディタ</a>
+      で編集し、ダウンロードしたファイルをここで指定してください。
+      初見・常連の文言はチャットタブ、位置・幅・件数はチャット／レイアウトタブで調整します。
     </div>
     <div class="app-card">
       <div class="app-field app-stack-sm">
@@ -232,6 +236,7 @@
         <div class="app-row">
           <md-outlined-text-field id="css-path" class="app-grow" placeholder="CSSファイルを選択..." readonly></md-outlined-text-field>
           <md-outlined-button id="browse-btn">参照...</md-outlined-button>
+          <md-outlined-button id="open-css-editor-btn">CSS エディタを開く</md-outlined-button>
           <md-text-button id="clear-btn" style="--md-text-button-label-text-color: var(--md-sys-color-error);">クリア</md-text-button>
         </div>
       </div>

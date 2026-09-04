@@ -1,0 +1,18 @@
+{
+  "id": "mobile-readable",
+  "label": "スマホ読みやすめ",
+  "description": "約6インチ視聴向け。文字サイズを大きめに。",
+  "values": {
+    "--font-size": "24px",
+    "--font-family": "'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif",
+    "--bg-color": "rgba(0, 0, 0, 0.78)",
+    "--text-color": "#f5f5f5",
+    "--username-color": "#7dd3fc",
+    "--superchat-color": "#fbbf24",
+    "--owner-color": "#f87171",
+    "--moderator-color": "#86efac",
+    "--border-radius": "10px",
+    "--padding": "8px 12px",
+    "--avatar-size": "28px"
+  }
+}
