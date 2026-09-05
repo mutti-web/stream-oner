@@ -6,13 +6,24 @@ async function initYoutube() {
   setMdFieldValue(document.getElementById('yt-chat-source'), cfg.chatSource || 'auto');
   setMdFieldValue(document.getElementById('yt-interval'), cfg.pollingIntervalMs || 5000);
   setMdFieldValue(document.getElementById('yt-max'), String(cfg.maxComments || 8));
-  setMdFieldValue(document.getElementById('yt-duration'), cfg.showDurationMs || 8000);
+  {
+    const dur = Number(cfg.showDurationMs);
+    setMdFieldValue(document.getElementById('yt-duration'), Number.isFinite(dur) ? Math.max(0, dur) : 8000);
+  }
   setMdFieldValue(document.getElementById('yt-anim'), cfg.animMode || 'slide-up');
   setMdFieldValue(document.getElementById('yt-pos'), cfg.position || 'bottom-right');
   setMdFieldValue(document.getElementById('yt-width'), String(cfg.width ?? 400));
   setMdFieldValue(document.getElementById('yt-gap'), String(cfg.gap ?? 6));
   setMdFieldValue(document.getElementById('yt-badge-first'), cfg.badgeFirst !== undefined ? cfg.badgeFirst : '🔰初見');
   setMdFieldValue(document.getElementById('yt-badge-regular'), cfg.badgeRegular !== undefined ? cfg.badgeRegular : '⭐常連');
+  setMdFieldValue(document.getElementById('yt-badge-member'), cfg.badgeMember !== undefined ? cfg.badgeMember : 'メンバー');
+  setMdFieldValue(document.getElementById('yt-badge-moderator'), cfg.badgeModerator !== undefined ? cfg.badgeModerator : 'MOD');
+  setMdFieldValue(document.getElementById('yt-badge-owner'), cfg.badgeOwner !== undefined ? cfg.badgeOwner : '配信者');
+  setMdFieldValue(document.getElementById('yt-badge-icon-first'), cfg.badgeIconFirst || '');
+  setMdFieldValue(document.getElementById('yt-badge-icon-regular'), cfg.badgeIconRegular || '');
+  setMdFieldValue(document.getElementById('yt-badge-icon-member'), cfg.badgeIconMember || '');
+  setMdFieldValue(document.getElementById('yt-badge-icon-moderator'), cfg.badgeIconModerator || '');
+  setMdFieldValue(document.getElementById('yt-badge-icon-owner'), cfg.badgeIconOwner || '');
   setMdFieldValue(document.getElementById('yt-badge-threshold'), cfg.badgeThreshold || 10);
   setMdFieldValue(document.getElementById('yt-ng-words'), arrayToLines(cfg.ngWords));
   setMdFieldValue(document.getElementById('yt-ng-users'), arrayToLines(cfg.ngUserIds));
@@ -83,16 +94,37 @@ function renderSuperChatTiers(tiers) {
   });
 }
 
+/** 空・非数・負数は 0（永久表示）。正数はそのまま。 */
+function normalizeShowDurationMs(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n);
+}
+
+function readRoleBadgeFields() {
+  return {
+    badgeMember: readMdValue(document.getElementById('yt-badge-member')),
+    badgeModerator: readMdValue(document.getElementById('yt-badge-moderator')),
+    badgeOwner: readMdValue(document.getElementById('yt-badge-owner')),
+    badgeIconFirst: readMdValue(document.getElementById('yt-badge-icon-first')).trim(),
+    badgeIconRegular: readMdValue(document.getElementById('yt-badge-icon-regular')).trim(),
+    badgeIconMember: readMdValue(document.getElementById('yt-badge-icon-member')).trim(),
+    badgeIconModerator: readMdValue(document.getElementById('yt-badge-icon-moderator')).trim(),
+    badgeIconOwner: readMdValue(document.getElementById('yt-badge-icon-owner')).trim(),
+  };
+}
+
 function buildYtOverlayPayload() {
   return {
     maxComments: Number(readMdValue(document.getElementById('yt-max'))),
-    showDurationMs: Number(readMdValue(document.getElementById('yt-duration'))),
+    showDurationMs: normalizeShowDurationMs(readMdValue(document.getElementById('yt-duration'))),
     animMode: readMdValue(document.getElementById('yt-anim')),
     position: readMdValue(document.getElementById('yt-pos')),
     width: Number(readMdValue(document.getElementById('yt-width'))),
     gap: Number(readMdValue(document.getElementById('yt-gap'))),
     badgeFirst: readMdValue(document.getElementById('yt-badge-first')),
     badgeRegular: readMdValue(document.getElementById('yt-badge-regular')),
+    ...readRoleBadgeFields(),
     badgeThreshold: Number(readMdValue(document.getElementById('yt-badge-threshold'))),
     superChatTiers: readSuperChatTiersFromDom(),
   };
@@ -110,13 +142,14 @@ function buildYtPayload() {
     chatSource: readMdValue(document.getElementById('yt-chat-source')) || 'auto',
     pollingIntervalMs: Number(readMdValue(document.getElementById('yt-interval'))),
     maxComments: Number(readMdValue(document.getElementById('yt-max'))),
-    showDurationMs: Number(readMdValue(document.getElementById('yt-duration'))),
+    showDurationMs: normalizeShowDurationMs(readMdValue(document.getElementById('yt-duration'))),
     animMode: readMdValue(document.getElementById('yt-anim')),
     position: readMdValue(document.getElementById('yt-pos')),
     width: Number(readMdValue(document.getElementById('yt-width'))),
     gap: Number(readMdValue(document.getElementById('yt-gap'))),
     badgeFirst: readMdValue(document.getElementById('yt-badge-first')),
     badgeRegular: readMdValue(document.getElementById('yt-badge-regular')),
+    ...readRoleBadgeFields(),
     badgeThreshold: Number(readMdValue(document.getElementById('yt-badge-threshold'))),
     ngWords,
     ngUserIds,
@@ -197,5 +230,40 @@ function bindYoutubeActions() {
   document.getElementById('gcloud-link').addEventListener('click', e => {
     e.preventDefault();
     api.openExternal('https://console.cloud.google.com/');
+  });
+
+  document.getElementById('yt-role-badges')?.addEventListener('click', async (ev) => {
+    const pathNodes = typeof ev.composedPath === 'function' ? ev.composedPath() : [];
+    let browseEl = null;
+    let clearEl = null;
+    for (const node of pathNodes) {
+      if (!(node instanceof Element)) continue;
+      if (node.hasAttribute('data-yt-badge-browse')) {
+        browseEl = node;
+        break;
+      }
+      if (node.hasAttribute('data-yt-badge-clear')) {
+        clearEl = node;
+        break;
+      }
+    }
+    if (!browseEl && !clearEl) {
+      browseEl = ev.target?.closest?.('[data-yt-badge-browse]') || null;
+      clearEl = ev.target?.closest?.('[data-yt-badge-clear]') || null;
+    }
+    const role = browseEl?.getAttribute('data-yt-badge-browse')
+      || clearEl?.getAttribute('data-yt-badge-clear');
+    if (!role) return;
+    const field = document.getElementById(`yt-badge-icon-${role}`);
+    if (!field) return;
+    if (clearEl) {
+      setMdFieldValue(field, '');
+      persistYoutube();
+      return;
+    }
+    const p = await api.openImageFileDialog?.().catch(() => null);
+    if (!p) return;
+    setMdFieldValue(field, p);
+    persistYoutube();
   });
 }

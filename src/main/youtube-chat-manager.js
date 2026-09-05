@@ -29,6 +29,7 @@ const { isPortAvailable } = require('./port-utils');
 const staticFileCache = require('./static-file-cache');
 const customCss = require('./custom-css');
 const superchatTiers = require('./superchat-tiers');
+const badgeIcons = require('./badge-icons');
 
 const MAX_PINNED = 3;
 const DEFAULT_BATCH_PROCESS_LIMIT = 50;
@@ -55,6 +56,14 @@ const K = {
   botPrefix:       'yt.botCommandPrefix',
   badgeFirst:      'yt.badgeFirst',
   badgeRegular:    'yt.badgeRegular',
+  badgeMember:     'yt.badgeMember',
+  badgeModerator:  'yt.badgeModerator',
+  badgeOwner:      'yt.badgeOwner',
+  badgeIconFirst: badgeIcons.PATH_KEYS.first,
+  badgeIconRegular: badgeIcons.PATH_KEYS.regular,
+  badgeIconMember: badgeIcons.PATH_KEYS.member,
+  badgeIconModerator: badgeIcons.PATH_KEYS.moderator,
+  badgeIconOwner:  badgeIcons.PATH_KEYS.owner,
   badgeThreshold:  'yt.badgeThreshold',
   batchProcessLimit: 'yt.batchProcessLimit',
   superChatTiers: superchatTiers.STORE_KEY,
@@ -127,6 +136,10 @@ class YouTubeChatManager extends EventEmitter {
         gap:           s.get(K.gap,          6),
         badgeFirst:    s.get(K.badgeFirst,   '🔰初見'),
         badgeRegular:  s.get(K.badgeRegular, '⭐常連'),
+        badgeMember:   s.get(K.badgeMember,  'メンバー'),
+        badgeModerator: s.get(K.badgeModerator, 'MOD'),
+        badgeOwner:    s.get(K.badgeOwner,   '配信者'),
+        badgeIcons: badgeIcons.allIconUrls(s),
         badgeThreshold:s.get(K.badgeThreshold, 10),
         superChatTiers: superchatTiers.normalizeTiers(s.get(K.superChatTiers)),
       },
@@ -179,6 +192,14 @@ class YouTubeChatManager extends EventEmitter {
       gap:              s.get(K.gap,          6),
       badgeFirst:       s.get(K.badgeFirst,   '🔰初見'),
       badgeRegular:     s.get(K.badgeRegular, '⭐常連'),
+      badgeMember:      s.get(K.badgeMember,  'メンバー'),
+      badgeModerator:   s.get(K.badgeModerator, 'MOD'),
+      badgeOwner:       s.get(K.badgeOwner,   '配信者'),
+      badgeIconFirst:   s.get(K.badgeIconFirst, '') || '',
+      badgeIconRegular: s.get(K.badgeIconRegular, '') || '',
+      badgeIconMember:  s.get(K.badgeIconMember, '') || '',
+      badgeIconModerator: s.get(K.badgeIconModerator, '') || '',
+      badgeIconOwner:   s.get(K.badgeIconOwner, '') || '',
       badgeThreshold:   s.get(K.badgeThreshold, 10),
       ngWords:          s.get(K.ngWords, []),
       ngUserIds:        s.get(K.ngUserIds, []),
@@ -208,7 +229,11 @@ class YouTubeChatManager extends EventEmitter {
     if (settings.chatSource       !== undefined) s.set(K.chatSource, normalizeChatSource(settings.chatSource));
     if (settings.pollingIntervalMs !== undefined) s.set(K.pollingInterval, settings.pollingIntervalMs);
     if (settings.maxComments       !== undefined) s.set(K.maxComments,    settings.maxComments);
-    if (settings.showDurationMs    !== undefined) s.set(K.showDuration,   settings.showDurationMs);
+    if (settings.showDurationMs    !== undefined) {
+      // 0 以下 = オーバーレイで永久表示（件数溢れのみ削除）
+      const n = Number(settings.showDurationMs);
+      s.set(K.showDuration, !Number.isFinite(n) || n <= 0 ? 0 : Math.round(n));
+    }
     if (settings.animMode          !== undefined) s.set(K.animMode,       settings.animMode);
     if (settings.position          !== undefined) s.set(K.position,       settings.position);
     if (settings.width             !== undefined) {
@@ -221,6 +246,24 @@ class YouTubeChatManager extends EventEmitter {
     }
     if (settings.badgeFirst        !== undefined) s.set(K.badgeFirst,     settings.badgeFirst);
     if (settings.badgeRegular      !== undefined) s.set(K.badgeRegular,   settings.badgeRegular);
+    if (settings.badgeMember       !== undefined) s.set(K.badgeMember,    String(settings.badgeMember ?? ''));
+    if (settings.badgeModerator    !== undefined) s.set(K.badgeModerator, String(settings.badgeModerator ?? ''));
+    if (settings.badgeOwner        !== undefined) s.set(K.badgeOwner,     String(settings.badgeOwner ?? ''));
+    let badgeIconChanged = false;
+    const iconSettingToStore = {
+      badgeIconFirst: K.badgeIconFirst,
+      badgeIconRegular: K.badgeIconRegular,
+      badgeIconMember: K.badgeIconMember,
+      badgeIconModerator: K.badgeIconModerator,
+      badgeIconOwner: K.badgeIconOwner,
+    };
+    for (const [settingKey, storeKey] of Object.entries(iconSettingToStore)) {
+      if (settings[settingKey] !== undefined) {
+        s.set(storeKey, String(settings[settingKey] || '').trim());
+        badgeIconChanged = true;
+      }
+    }
+    if (badgeIconChanged) badgeIcons.bumpRevision(s);
     if (settings.badgeThreshold    !== undefined) s.set(K.badgeThreshold, settings.badgeThreshold);
     if (settings.ngWords           !== undefined) s.set(K.ngWords, settings.ngWords);
     if (settings.ngUserIds         !== undefined) s.set(K.ngUserIds, settings.ngUserIds);
@@ -517,6 +560,7 @@ class YouTubeChatManager extends EventEmitter {
         return;
       }
       if (customCss.tryHandleCustomCssRoutes(url, res, this._store, staticFileCache)) return;
+      if (badgeIcons.tryHandleBadgeIconRoute(url, res, this._store, staticFileCache)) return;
       res.writeHead(404);
       res.end('Not Found');
     });

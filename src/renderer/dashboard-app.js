@@ -38,7 +38,13 @@ let pinnedIds = new Set();
 let chatLimit = 500;
 let scLimit = 50;
 let modalChannelId = null;
-let badgeLabels = { first: '🔰初見', regular: '⭐常連' };
+let badgeLabels = {
+  first: '🔰初見',
+  regular: '⭐常連',
+  member: 'メンバー',
+  moderator: 'MOD',
+  owner: '配信者',
+};
 
 let rpcStatus = { state: 'disconnected', error: null };
 let ytStatus = { pollerRunning: false, error: null };
@@ -556,10 +562,11 @@ function createMsgElement(msg) {
   author.textContent = msg.author.name;
   header.appendChild(author);
 
-  if (msg.author.isOwner) header.appendChild(createBadge('配信者', 'owner'));
-  if (msg.author.isModerator) header.appendChild(createBadge('MOD', 'mod'));
+  if (msg.author.isOwner) header.appendChild(createBadge(badgeLabels.owner || '配信者', 'owner'));
+  else if (msg.author.isModerator) header.appendChild(createBadge(badgeLabels.moderator || 'MOD', 'mod'));
+  else if (msg.author.isMember) header.appendChild(createBadge(badgeLabels.member || 'メンバー', 'member'));
   if (msg.author.isFirstTime) header.appendChild(createBadge(badgeLabels.first, 'first'));
-  if (msg.author.isRegular) header.appendChild(createBadge(badgeLabels.regular, 'regular'));
+  else if (msg.author.isRegular) header.appendChild(createBadge(badgeLabels.regular, 'regular'));
 
   if (msg.superChat) {
     const scAmount = document.createElement('span');
@@ -850,6 +857,9 @@ function applyBadgeLabelsFromConfig(cfg) {
   if (!cfg) return;
   if (cfg.badgeFirst !== undefined) badgeLabels.first = cfg.badgeFirst;
   if (cfg.badgeRegular !== undefined) badgeLabels.regular = cfg.badgeRegular;
+  if (cfg.badgeMember !== undefined) badgeLabels.member = cfg.badgeMember;
+  if (cfg.badgeModerator !== undefined) badgeLabels.moderator = cfg.badgeModerator;
+  if (cfg.badgeOwner !== undefined) badgeLabels.owner = cfg.badgeOwner;
   document.querySelectorAll('.badge-first').forEach((el) => {
     el.textContent = badgeLabels.first;
   });

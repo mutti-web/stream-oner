@@ -123,9 +123,19 @@
     }
 
     .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
       font-size: var(--badge-font-size); font-weight: 700;
       padding: var(--badge-padding); border-radius: var(--badge-radius); flex-shrink: 0;
     }
+    .badge-icon {
+      width: 1.15em;
+      height: 1.15em;
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .badge-label { line-height: 1.2; }
     .badge-owner     { background: var(--owner-color);     color: var(--badge-text-dark); }
     .badge-moderator { background: var(--moderator-color); color: var(--badge-text-dark); }
     .badge-member    { background: var(--member-color);    color: var(--badge-text-dark); }
@@ -302,10 +312,15 @@
     // ============================================================
     function addMessage(msg) {
       const maxComments  = cfg?.display?.maxComments   ?? 8;
-      let showDuration = cfg?.display?.showDurationMs ?? 8000;
-      if (msg?.superChat) {
+      // 0 以下 = 時間では消さない（件数溢れのみ）。未設定時のみ既定 8000。
+      let showDuration = Number(cfg?.display?.showDurationMs);
+      if (!Number.isFinite(showDuration)) showDuration = 8000;
+      if (showDuration < 0) showDuration = 0;
+      // 案A: 全体が永久表示のときは tier 時間を無視。時間指定時のみスパチャ tier を適用。
+      if (showDuration > 0 && msg?.superChat) {
         const tier = resolveSuperChatTier(msg);
-        if (tier?.durationMs) showDuration = tier.durationMs;
+        const tierMs = Number(tier?.durationMs);
+        if (Number.isFinite(tierMs) && tierMs > 0) showDuration = tierMs;
       }
 
       const el = createChatItem(msg);
@@ -317,7 +332,9 @@
         for (let i = 0; i < overflow; i++) removeItem(items[i]);
       }
 
-      setTimeout(() => removeItem(el), showDuration);
+      if (showDuration > 0) {
+        setTimeout(() => removeItem(el), showDuration);
+      }
     }
 
     function setPins(list) {
@@ -382,14 +399,18 @@
       username.textContent = msg.author.name;
       header.appendChild(username);
 
-      if (msg.author.isOwner)         header.appendChild(makeBadge('配信者', 'owner'));
-      else if (msg.author.isModerator) header.appendChild(makeBadge('MOD',    'moderator'));
-      else if (msg.author.isMember)    header.appendChild(makeBadge('メンバー', 'member'));
+      if (msg.author.isOwner) {
+        appendRoleBadge(header, 'owner');
+      } else if (msg.author.isModerator) {
+        appendRoleBadge(header, 'moderator');
+      } else if (msg.author.isMember) {
+        appendRoleBadge(header, 'member');
+      }
 
       if (msg.author.isFirstTime) {
-        header.appendChild(makeBadge(cfg?.display?.badgeFirst || '🔰初見', 'first'));
+        appendRoleBadge(header, 'first');
       } else if (msg.author.isRegular) {
-        header.appendChild(makeBadge(cfg?.display?.badgeRegular || '⭐常連', 'regular'));
+        appendRoleBadge(header, 'regular');
       }
 
       body.appendChild(header);
@@ -411,10 +432,46 @@
       return item;
     }
 
-    function makeBadge(label, type) {
+    function roleBadgeDefaults(type) {
+      if (type === 'owner') return { labelKey: 'badgeOwner', label: '配信者' };
+      if (type === 'moderator') return { labelKey: 'badgeModerator', label: 'MOD' };
+      if (type === 'member') return { labelKey: 'badgeMember', label: 'メンバー' };
+      if (type === 'first') return { labelKey: 'badgeFirst', label: '🔰初見' };
+      if (type === 'regular') return { labelKey: 'badgeRegular', label: '⭐常連' };
+      return { labelKey: '', label: '' };
+    }
+
+    function appendRoleBadge(header, type) {
+      const defaults = roleBadgeDefaults(type);
+      const rawLabel = defaults.labelKey ? cfg?.display?.[defaults.labelKey] : undefined;
+      const label = rawLabel !== undefined && rawLabel !== null
+        ? String(rawLabel)
+        : defaults.label;
+      const iconUrl = cfg?.display?.badgeIcons?.[type] || '';
+      const b = makeBadge(label, type, iconUrl);
+      if (b) header.appendChild(b);
+    }
+
+    function makeBadge(label, type, iconUrl) {
+      const text = String(label || '');
+      const icon = String(iconUrl || '');
+      if (!text && !icon) return null;
       const b = document.createElement('span');
       b.className   = `badge badge-${type}`;
-      b.textContent = label;
+      if (icon) {
+        const img = document.createElement('img');
+        img.className = 'badge-icon';
+        img.src = icon;
+        img.alt = '';
+        img.decoding = 'async';
+        b.appendChild(img);
+      }
+      if (text) {
+        const span = document.createElement('span');
+        span.className = 'badge-label';
+        span.textContent = text;
+        b.appendChild(span);
+      }
       return b;
     }
 

@@ -2,6 +2,7 @@
 
 const suiteLayout = require('./suite-layout');
 const superchatTiers = require('./superchat-tiers');
+const badgeIcons = require('./badge-icons');
 const slotCfg = require('./avatar-slot-config');
 const reactionCfg = require('./avatar-reactions');
 const { normalizeRules } = require('./obs-event-dispatcher');
@@ -36,6 +37,14 @@ const YT_OVERLAY_K = {
   gap: 'yt.gap',
   badgeFirst: 'yt.badgeFirst',
   badgeRegular: 'yt.badgeRegular',
+  badgeMember: 'yt.badgeMember',
+  badgeModerator: 'yt.badgeModerator',
+  badgeOwner: 'yt.badgeOwner',
+  badgeIconFirst: 'yt.badgeIconFirst',
+  badgeIconRegular: 'yt.badgeIconRegular',
+  badgeIconMember: 'yt.badgeIconMember',
+  badgeIconModerator: 'yt.badgeIconModerator',
+  badgeIconOwner: 'yt.badgeIconOwner',
   badgeThreshold: 'yt.badgeThreshold',
   superChatTiers: 'yt.superChatTiers',
 };
@@ -43,6 +52,20 @@ const YT_OVERLAY_K = {
 const CUSTOM_CSS_K = 'customCssPath';
 
 const DISPLAY_MODES = new Set(['both', 'p1', 'p2']);
+
+/**
+ * 表示時間（ms）。0 以下 / 非数は永久表示。
+ * @param {unknown} raw
+ * @param {number} [fallbackWhenMissing=8000] キー未設定時など undefined 向け（0 は永久なので fallback しない）
+ */
+function normalizeShowDurationMs(raw, fallbackWhenMissing = 8000) {
+  if (raw === undefined || raw === null || raw === '') {
+    return fallbackWhenMissing;
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n);
+}
 
 function isSlotId(id) {
   return SLOT_IDS.includes(String(id || ''));
@@ -59,13 +82,21 @@ function readSlot(store, key) {
 function captureYoutubeOverlay(store) {
   return {
     maxComments: Math.max(1, Math.min(20, Number(store.get(YT_OVERLAY_K.maxComments, 8)) || 8)),
-    showDurationMs: Math.max(2000, Number(store.get(YT_OVERLAY_K.showDurationMs, 8000)) || 8000),
+    showDurationMs: normalizeShowDurationMs(store.get(YT_OVERLAY_K.showDurationMs, 8000), 8000),
     animMode: store.get(YT_OVERLAY_K.animMode, 'slide-up') || 'slide-up',
     position: store.get(YT_OVERLAY_K.position, 'bottom-right') || 'bottom-right',
     width: Math.max(200, Math.min(1200, Number(store.get(YT_OVERLAY_K.width, 400)) || 400)),
     gap: Math.max(0, Math.min(48, Number(store.get(YT_OVERLAY_K.gap, 6)) || 6)),
     badgeFirst: String(store.get(YT_OVERLAY_K.badgeFirst, '🔰初見') || '🔰初見'),
     badgeRegular: String(store.get(YT_OVERLAY_K.badgeRegular, '⭐常連') || '⭐常連'),
+    badgeMember: String(store.get(YT_OVERLAY_K.badgeMember, 'メンバー') ?? 'メンバー'),
+    badgeModerator: String(store.get(YT_OVERLAY_K.badgeModerator, 'MOD') ?? 'MOD'),
+    badgeOwner: String(store.get(YT_OVERLAY_K.badgeOwner, '配信者') ?? '配信者'),
+    badgeIconFirst: String(store.get(YT_OVERLAY_K.badgeIconFirst, '') || ''),
+    badgeIconRegular: String(store.get(YT_OVERLAY_K.badgeIconRegular, '') || ''),
+    badgeIconMember: String(store.get(YT_OVERLAY_K.badgeIconMember, '') || ''),
+    badgeIconModerator: String(store.get(YT_OVERLAY_K.badgeIconModerator, '') || ''),
+    badgeIconOwner: String(store.get(YT_OVERLAY_K.badgeIconOwner, '') || ''),
     badgeThreshold: Math.max(2, Number(store.get(YT_OVERLAY_K.badgeThreshold, 10)) || 10),
     superChatTiers: superchatTiers.normalizeTiers(store.get(YT_OVERLAY_K.superChatTiers)),
   };
@@ -109,6 +140,14 @@ function captureYoutubeOverlayFromPartial(raw) {
     gap: yt.gap,
     badgeFirst: yt.badgeFirst,
     badgeRegular: yt.badgeRegular,
+    badgeMember: yt.badgeMember,
+    badgeModerator: yt.badgeModerator,
+    badgeOwner: yt.badgeOwner,
+    badgeIconFirst: yt.badgeIconFirst,
+    badgeIconRegular: yt.badgeIconRegular,
+    badgeIconMember: yt.badgeIconMember,
+    badgeIconModerator: yt.badgeIconModerator,
+    badgeIconOwner: yt.badgeIconOwner,
     badgeThreshold: yt.badgeThreshold,
     superChatTiers: yt.superChatTiers,
   };
@@ -144,13 +183,21 @@ function normalizeState(raw) {
     suiteObsLayout: suiteLayout.normalizeLayout(s.suiteObsLayout || {}),
     youtubeOverlay: {
       maxComments: Math.max(1, Math.min(20, Number(yo.maxComments) || 8)),
-      showDurationMs: Math.max(2000, Number(yo.showDurationMs) || 8000),
+      showDurationMs: normalizeShowDurationMs(yo.showDurationMs, 8000),
       animMode: yo.animMode === 'fade-in' ? 'fade-in' : 'slide-up',
       position: yo.position || 'bottom-right',
       width: Math.max(200, Math.min(1200, Number(yo.width) || 400)),
       gap: Math.max(0, Math.min(48, Number(yo.gap) || 6)),
       badgeFirst: String(yo.badgeFirst || '🔰初見'),
       badgeRegular: String(yo.badgeRegular || '⭐常連'),
+      badgeMember: yo.badgeMember !== undefined ? String(yo.badgeMember) : 'メンバー',
+      badgeModerator: yo.badgeModerator !== undefined ? String(yo.badgeModerator) : 'MOD',
+      badgeOwner: yo.badgeOwner !== undefined ? String(yo.badgeOwner) : '配信者',
+      badgeIconFirst: String(yo.badgeIconFirst || ''),
+      badgeIconRegular: String(yo.badgeIconRegular || ''),
+      badgeIconMember: String(yo.badgeIconMember || ''),
+      badgeIconModerator: String(yo.badgeIconModerator || ''),
+      badgeIconOwner: String(yo.badgeIconOwner || ''),
       badgeThreshold: Math.max(2, Number(yo.badgeThreshold) || 10),
       superChatTiers: superchatTiers.normalizeTiers(yo.superChatTiers),
     },
@@ -388,8 +435,17 @@ function writeYoutubeOverlayToStore(store, yo) {
   store.set(YT_OVERLAY_K.gap, yo.gap);
   store.set(YT_OVERLAY_K.badgeFirst, yo.badgeFirst);
   store.set(YT_OVERLAY_K.badgeRegular, yo.badgeRegular);
+  store.set(YT_OVERLAY_K.badgeMember, yo.badgeMember);
+  store.set(YT_OVERLAY_K.badgeModerator, yo.badgeModerator);
+  store.set(YT_OVERLAY_K.badgeOwner, yo.badgeOwner);
+  store.set(YT_OVERLAY_K.badgeIconFirst, yo.badgeIconFirst || '');
+  store.set(YT_OVERLAY_K.badgeIconRegular, yo.badgeIconRegular || '');
+  store.set(YT_OVERLAY_K.badgeIconMember, yo.badgeIconMember || '');
+  store.set(YT_OVERLAY_K.badgeIconModerator, yo.badgeIconModerator || '');
+  store.set(YT_OVERLAY_K.badgeIconOwner, yo.badgeIconOwner || '');
   store.set(YT_OVERLAY_K.badgeThreshold, yo.badgeThreshold);
   store.set(YT_OVERLAY_K.superChatTiers, yo.superChatTiers);
+  badgeIcons.bumpRevision(store);
 }
 
 function writeSnapshotToStore(store, snapshot) {

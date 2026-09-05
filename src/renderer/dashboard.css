@@ -488,6 +488,10 @@ md-icon-button.btn-ng {
   background: color-mix(in srgb, var(--md-sys-color-tertiary) 45%, transparent);
   color: var(--md-sys-color-on-tertiary-container);
 }
+.badge-member {
+  background: color-mix(in srgb, var(--md-sys-color-secondary) 40%, transparent);
+  color: var(--md-sys-color-on-secondary-container);
+}
 .badge-first {
   background: color-mix(in srgb, var(--md-sys-color-primary) 40%, transparent);
   color: var(--md-sys-color-on-primary-container);

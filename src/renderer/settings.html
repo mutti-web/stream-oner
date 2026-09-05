@@ -228,7 +228,7 @@
       フォント・色などの見た目は
       <a href="#" id="open-css-editor-link">CSS エディタ</a>
       （チャット / Discord VC）で編集し、ダウンロードしたファイルをここで指定してください。
-      初見・常連の文言はチャットタブ、位置・幅・件数はチャット／レイアウトタブで調整します。
+      初見・常連・メンバー／MOD／配信者の文言とアイコンはチャットタブ、位置・幅・件数はチャット／レイアウトタブで調整します。
       バッジの色・サイズは CSS エディタで変更できます。
     </div>
     <div class="app-card">
@@ -622,8 +622,8 @@
           <md-outlined-text-field
             id="yt-duration"
             type="number"
-            label="表示時間（ms）"
-            value="8000" min="2000" step="1000">
+            label="表示時間（ms・0で永久）"
+            value="8000" min="0" step="1000">
           </md-outlined-text-field>
         </div>
       </div>
@@ -708,9 +708,48 @@
     <div class="app-section-title">バッジ・スタンプ設定（任意）</div>
     <div class="app-card">
       <div class="app-field">
-        <div class="app-grid-2">
-          <md-outlined-text-field id="yt-badge-first" label="初見バッジ" placeholder="例: 🔰初見"></md-outlined-text-field>
-          <md-outlined-text-field id="yt-badge-regular" label="常連バッジ" placeholder="例: ⭐常連"></md-outlined-text-field>
+        <div class="app-hint">各バッジは文言とアイコン画像（任意）を設定できます。画像は文言の左に表示されます。文言を空にするとアイコンのみになります。</div>
+        <div class="app-stack-md" id="yt-role-badges">
+          <div class="app-stack-sm yt-role-badge-row" data-role="first">
+            <md-outlined-text-field id="yt-badge-first" label="初見バッジ" placeholder="例: 🔰初見"></md-outlined-text-field>
+            <div class="app-row">
+              <md-outlined-text-field id="yt-badge-icon-first" class="app-grow" label="初見アイコン" placeholder="画像未設定" readonly></md-outlined-text-field>
+              <md-outlined-button type="button" data-yt-badge-browse="first">参照...</md-outlined-button>
+              <md-text-button type="button" data-yt-badge-clear="first" style="--md-text-button-label-text-color: var(--md-sys-color-error);">クリア</md-text-button>
+            </div>
+          </div>
+          <div class="app-stack-sm yt-role-badge-row" data-role="regular">
+            <md-outlined-text-field id="yt-badge-regular" label="常連バッジ" placeholder="例: ⭐常連"></md-outlined-text-field>
+            <div class="app-row">
+              <md-outlined-text-field id="yt-badge-icon-regular" class="app-grow" label="常連アイコン" placeholder="画像未設定" readonly></md-outlined-text-field>
+              <md-outlined-button type="button" data-yt-badge-browse="regular">参照...</md-outlined-button>
+              <md-text-button type="button" data-yt-badge-clear="regular" style="--md-text-button-label-text-color: var(--md-sys-color-error);">クリア</md-text-button>
+            </div>
+          </div>
+          <div class="app-stack-sm yt-role-badge-row" data-role="member">
+            <md-outlined-text-field id="yt-badge-member" label="メンバーバッジ" placeholder="例: メンバー"></md-outlined-text-field>
+            <div class="app-row">
+              <md-outlined-text-field id="yt-badge-icon-member" class="app-grow" label="メンバーアイコン" placeholder="画像未設定" readonly></md-outlined-text-field>
+              <md-outlined-button type="button" data-yt-badge-browse="member">参照...</md-outlined-button>
+              <md-text-button type="button" data-yt-badge-clear="member" style="--md-text-button-label-text-color: var(--md-sys-color-error);">クリア</md-text-button>
+            </div>
+          </div>
+          <div class="app-stack-sm yt-role-badge-row" data-role="moderator">
+            <md-outlined-text-field id="yt-badge-moderator" label="モデレーターバッジ" placeholder="例: MOD"></md-outlined-text-field>
+            <div class="app-row">
+              <md-outlined-text-field id="yt-badge-icon-moderator" class="app-grow" label="モデレーターアイコン" placeholder="画像未設定" readonly></md-outlined-text-field>
+              <md-outlined-button type="button" data-yt-badge-browse="moderator">参照...</md-outlined-button>
+              <md-text-button type="button" data-yt-badge-clear="moderator" style="--md-text-button-label-text-color: var(--md-sys-color-error);">クリア</md-text-button>
+            </div>
+          </div>
+          <div class="app-stack-sm yt-role-badge-row" data-role="owner">
+            <md-outlined-text-field id="yt-badge-owner" label="配信者バッジ" placeholder="例: 配信者"></md-outlined-text-field>
+            <div class="app-row">
+              <md-outlined-text-field id="yt-badge-icon-owner" class="app-grow" label="配信者アイコン" placeholder="画像未設定" readonly></md-outlined-text-field>
+              <md-outlined-button type="button" data-yt-badge-browse="owner">参照...</md-outlined-button>
+              <md-text-button type="button" data-yt-badge-clear="owner" style="--md-text-button-label-text-color: var(--md-sys-color-error);">クリア</md-text-button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="app-field">

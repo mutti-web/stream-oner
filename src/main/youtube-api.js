@@ -335,12 +335,14 @@ class YouTubeChatPoller {
   }
 
   _normalizeInnerTubeItem(item) {
+    // 「チャットへようこそ／プライバシー…」等のシステム通知はオーバーレイ対象外
+    if (item.liveChatViewerEngagementMessageRenderer) return null;
+
     const renderer =
       item.liveChatTextMessageRenderer ||
       item.liveChatPaidMessageRenderer ||
       item.liveChatPaidStickerRenderer ||
-      item.liveChatMembershipItemRenderer ||
-      item.liveChatViewerEngagementMessageRenderer;
+      item.liveChatMembershipItemRenderer;
     if (!renderer) return null;
 
     const id = renderer.id || `innertube-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
