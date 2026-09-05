@@ -217,7 +217,7 @@
       label: 'バッジ文字（暗）',
       type: 'color',
       default: '#1a1a1a',
-      hint: '配信者・モデ・メンバー・常連など明るい背景向け',
+      hint: '配信者・モデ・メンバー・常連など明るい背景向け。アイコン画像は Suite 設定で指定',
     },
     {
       id: 'badge-text-light',
