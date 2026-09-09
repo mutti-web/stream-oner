@@ -3,6 +3,11 @@ title: StreamONER プライバシーポリシー
 lang: ja
 ---
 
+<!--
+  公開 URL は docs/privacy.html（静的 HTML）。
+  .nojekyll により Jekyll は無効のため、本 Markdown は参照用。内容を変えるときは privacy.html も更新すること。
+-->
+
 # StreamONER プライバシーポリシー
 
 **最終更新日:** 2026-07-18  

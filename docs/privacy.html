@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StreamONER プライバシーポリシー</title>
+  <meta name="application-name" content="StreamONER">
+  <meta name="description" content="StreamONER のプライバシーポリシー。Google / YouTube OAuth データの取り扱い、保管、削除について説明します。">
+  <meta property="og:locale" content="ja_JP">
+  <meta property="og:title" content="StreamONER プライバシーポリシー">
+  <meta property="og:site_name" content="StreamONER">
+  <meta property="og:description" content="StreamONER のプライバシーポリシー。Google / YouTube OAuth データの取り扱いについて。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://streamoner.mutti.xyz/privacy.html">
+  <link rel="canonical" href="https://streamoner.mutti.xyz/privacy.html">
+  <link rel="stylesheet" href="./site.css">
+</head>
+<body>
+  <div class="site-wrap site-wrap--wide">
+    <header class="site-header">
+      <div>
+        <h1>StreamONER プライバシーポリシー</h1>
+        <p class="tagline">個人情報および Google / YouTube データの取り扱い</p>
+      </div>
+      <a class="site-cta" href="./">ホームへ</a>
+    </header>
+
+    <main class="privacy-doc">
+      <section class="site-section">
+        <p class="meta-line"><strong>最終更新日:</strong> 2026-07-18</p>
+        <p class="meta-line"><strong>運営:</strong> romu</p>
+        <p class="meta-line"><strong>連絡先:</strong> <a href="mailto:contact@mutti.xyz">contact@mutti.xyz</a></p>
+        <p class="meta-line"><strong>本アプリ:</strong> StreamONER（Windows / macOS 向けデスクトップアプリ）</p>
+        <p class="meta-line"><strong>ホームページ:</strong> <a href="https://streamoner.mutti.xyz/">https://streamoner.mutti.xyz/</a></p>
+        <p>
+          本プライバシーポリシーは、StreamONER（以下「本アプリ」）が取り扱う情報の種類、利用目的、保管・削除、および第三者への提供について説明します。
+        </p>
+      </section>
+
+      <section class="site-section">
+        <h2>1. 収集・アクセスする情報</h2>
+
+        <h3>1.1 Google / YouTube 連携（OAuth）</h3>
+        <p>
+          ユーザーが Google アカウント連携を許可した場合、本アプリは、認可したユーザー自身の次の YouTube データにアクセスします。
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>内容</th>
+                <th>目的</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>チャンネル ID・チャンネル名</td>
+                <td>認可したチャンネルの確認と連携状態の表示のため</td>
+              </tr>
+              <tr>
+                <td>YouTube アカウントに紐づく配信（ライブ）情報</td>
+                <td>配信中のライブを検出し、対象の動画 ID を取得するため</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>利用する権限（スコープ）は次のとおりです。</p>
+        <ul>
+          <li><code>https://www.googleapis.com/auth/youtube.readonly</code>（YouTube データの表示・読み取り）</li>
+        </ul>
+        <p>
+          本アプリは、ユーザーの Google パスワードを取得・保存しません。認証は Google の画面上で行われます。
+        </p>
+        <p>
+          Google OAuth のアクセストークンおよびリフレッシュトークンは、チャンネルの確認、配信中のライブ検出、および連携状態の維持にのみ使用し、ライブチャットメッセージの取得には使用しません。
+        </p>
+
+        <h3>1.2 ライブチャット表示で扱う情報</h3>
+        <p>
+          本アプリのライブチャット表示機能では、視聴者（第三者）の表示名・コメント・スーパーチャット等の表示用情報を扱う場合があります。これらは、配信者であるユーザーが本アプリおよび OBS 上でコメントを表示するために、ユーザーの端末上で処理・表示されます。
+        </p>
+        <p>
+          このライブチャット表示機能は Google OAuth によるアカウント連携とは別の機能であり、チャットメッセージの取得に Google OAuth のトークンは使用しません。
+        </p>
+
+        <h3>1.3 端末に保存する情報</h3>
+        <p>本アプリは、主にユーザーの端末上に次の情報を保存します。</p>
+        <ul>
+          <li>OAuth のアクセストークンおよびリフレッシュトークン（連携維持用）</li>
+          <li>アプリ設定（表示レイアウト、マイク設定、テーマ等）</li>
+          <li>ユーザーが任意で入力した API キーや Discord 用シークレット等</li>
+        </ul>
+        <p>トークンやシークレット類は、OS が提供する暗号化ストレージに保存します。</p>
+
+        <h3>1.4 データの送信先</h3>
+        <ul>
+          <li>Google / YouTube 連携時、本アプリはチャンネルの確認と配信中のライブ検出のため、ユーザーの端末から Google のサーバー（OAuth および YouTube Data API）へ必要なリクエストを送信します。</li>
+          <li>取得した YouTube 関連データおよび OAuth トークンを、運営者の独自サーバーへ送信・アップロードする仕組みはありません（本ポリシー最終更新時点）。</li>
+          <li>チャット表示のため、ユーザーが設定した OBS 等のローカル環境、またはユーザーが有効にした同一 LAN 上のリモート操作画面へ、表示用データを送る場合があります。対象はユーザーの PC および同一 LAN 内に限ります。</li>
+        </ul>
+      </section>
+
+      <section class="site-section">
+        <h2>2. 利用目的</h2>
+        <p>取得した情報は、次の目的にのみ使用します。</p>
+        <ol>
+          <li>認可した YouTube チャンネルの確認と連携状態の表示</li>
+          <li>認可したユーザーが配信中の YouTube ライブの検出と動画 ID の取得</li>
+          <li>ライブチャットの取得・表示（Google OAuth トークンは使用しません）</li>
+          <li>連携状態の維持および再接続</li>
+          <li>ユーザーが明示的に行った操作（連携解除、設定変更、バックアップ等）の実行</li>
+        </ol>
+        <p>
+          Google OAuth を利用して Google API から取得したデータは、上記 1、2、4 のユーザー向け機能の提供以外の目的には使用しません。
+        </p>
+      </section>
+
+      <section class="site-section">
+        <h2>3. Google API Services User Data Policy（Limited Use）</h2>
+        <p>
+          本アプリによる Google ユーザーデータの利用および転送は、
+          <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>
+          （Limited Use 要件を含む）に従います。
+        </p>
+        <p>本アプリは、次の行為を行いません。</p>
+        <ul>
+          <li>Google ユーザーデータの、広告プラットフォーム・データブローカー・情報再販業者等への販売または譲渡</li>
+          <li>Google ユーザーデータの、広告配信・再ターゲティング・パーソナライズド広告・インタレストベース広告への利用</li>
+          <li>Google ユーザーデータの、与信判断または貸付目的での利用</li>
+          <li>広告目的のトラッキング、および本アプリの利用状況を外部解析サービスへ送ること（製品として意図した送信は行いません）</li>
+          <li>YouTube 以外の Google サービスへの不正なアクセス</li>
+        </ul>
+      </section>
+
+      <section class="site-section">
+        <h2>4. 第三者提供</h2>
+        <p>
+          法令に基づく場合、またはセキュリティ上必要な場合を除き、取得した YouTube 関連データや OAuth トークンを第三者に提供しません。
+        </p>
+        <p>
+          第 1.4 節に記載のとおり、チャット表示のため OBS 等または同一 LAN 上のリモート操作画面へデータを送る場合があります。これはユーザーの設定および操作に基づくものです。
+        </p>
+      </section>
+
+      <section class="site-section">
+        <h2>5. 人による閲覧</h2>
+        <p>
+          運営者およびその関係者は、通常の運用において、ユーザーの Google ユーザーデータ（チャンネル情報・配信情報・OAuth トークン等）を閲覧しません。
+        </p>
+        <p>次の場合に限り、必要最小限の範囲で取り扱うことがあります。</p>
+        <ul>
+          <li>ユーザーがサポート対応のため明示的に同意し、必要な情報を提供した場合</li>
+          <li>セキュリティ上の調査（不正利用や障害の調査等）に必要な場合</li>
+          <li>法令に基づく場合</li>
+        </ul>
+      </section>
+
+      <section class="site-section">
+        <h2>6. 保管期間と削除</h2>
+        <ul>
+          <li>OAuth トークンは、連携中のみ端末に保持します。</li>
+          <li>本アプリ内で YouTube 連携を解除した場合、保存済みの YouTube OAuth トークンは削除します。</li>
+          <li>ライブチャットの表示用データは、表示や履歴機能のために端末上に保持される場合があります。アプリデータの削除により除去できます。</li>
+          <li>アプリのアンインストール後も、OS やユーザーデータ領域にファイルが残ることがあります。完全に削除する場合は、アプリのデータディレクトリの削除など、OS の手順に従ってください。</li>
+          <li>Google アカウント側でも、<a href="https://myaccount.google.com/permissions">Google アカウントのアプリのアクセス権</a> から本アプリのアクセスを取り消せます。</li>
+        </ul>
+      </section>
+
+      <section class="site-section">
+        <h2>7. セキュリティ</h2>
+        <p>
+          トークンや秘密情報は暗号化可能な形で端末に保存し、ソースコードや設定のエクスポートに含めないよう設計しています。ただし、端末の不正利用やマルウェア等によるリスクを完全に排除することはできません。
+        </p>
+      </section>
+
+      <section class="site-section">
+        <h2>8. 子どもの利用</h2>
+        <p>
+          本アプリは主に配信者向けのツールです。13 歳未満の子どもから、保護者の同意なく個人情報を意図的に収集することはありません。
+        </p>
+      </section>
+
+      <section class="site-section">
+        <h2>9. ポリシーの変更</h2>
+        <p>
+          本ポリシーの内容を変更する場合は、本ページの「最終更新日」を更新して掲載します。重要な変更がある場合は、合理的な方法で周知します。
+        </p>
+      </section>
+
+      <section class="site-section">
+        <h2>10. お問い合わせ</h2>
+        <p>本ポリシーに関するお問い合わせは、次の連絡先までご連絡ください。</p>
+        <ul class="site-footer-links">
+          <li>メール: <a href="mailto:contact@mutti.xyz">contact@mutti.xyz</a></li>
+          <li>運営: romu</li>
+          <li>ホームページ: <a href="https://streamoner.mutti.xyz/">https://streamoner.mutti.xyz/</a></li>
+        </ul>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

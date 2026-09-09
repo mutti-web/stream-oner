@@ -124,3 +124,58 @@ code {
   padding: 0.1em 0.35em;
   border-radius: 3px;
 }
+
+.site-wrap--wide {
+  max-width: 44rem;
+}
+
+.privacy-doc h3 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 0.98rem;
+  font-weight: 650;
+}
+
+.privacy-doc .meta-line {
+  margin: 0 0 0.35rem;
+  color: var(--site-muted);
+  font-size: 0.92rem;
+}
+
+.privacy-doc .meta-line strong {
+  color: var(--site-text);
+  font-weight: 600;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 0.75rem 0 1rem;
+}
+
+.privacy-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.privacy-doc th,
+.privacy-doc td {
+  border: 1px solid var(--site-border);
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.privacy-doc th {
+  background: #f7f8fa;
+  font-weight: 650;
+}
+
+.privacy-doc ul,
+.privacy-doc ol {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.privacy-doc li + li {
+  margin-top: 0.35rem;
+}
