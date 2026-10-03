@@ -93,6 +93,7 @@ class RemoteDashboardApi {
       discordCredsOk,
       timer,
       pinned: d.ytManager?.getPinnedMessages?.() ?? [],
+      recentMessages: d.ytManager?.getRecentMessages?.() ?? [],
       participants: d.ytManager?.getSessionParticipants?.() ?? [],
       sessionLog: d.getSessionLogManager?.()?.getStatus?.() ?? { active: false },
       lastSessionLog: d.getSessionLogManager?.()?.getLastSession?.() ?? null,

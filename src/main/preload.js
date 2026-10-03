@@ -46,6 +46,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   "pin-yt-message",
   "unpin-yt-message",
   "get-yt-pinned",
+  "get-yt-recent-messages",
   "get-yt-session-participants",
   "get-yt-viewer-detail",
   "clear-yt-session",
@@ -106,6 +107,7 @@ const ALLOWED_RECEIVE_CHANNELS = [
   "position-lock-changed",  // 位置ロック状態の変化
   "yt-status-changed",      // YouTubeポーラー状態の変化
   "yt-message",             // YouTubeチャットメッセージ
+  "yt-chat-resync",         // 直近コメントの再同期
   "yt-pin-changed",         // ピン留め状態の変化
   "yt-membership",          // メンバーシップ系システムメッセージ
   "yt-session-changed",     // 参加者一覧の更新
@@ -272,6 +274,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   /** 現在ピン留め中のメッセージ一覧（最大3件） */
   getYtPinned:   () => ipcRenderer.invoke("get-yt-pinned"),
+
+  /** PC / スマホ共通の直近コメント（古い順） */
+  getYtRecentMessages: () => ipcRenderer.invoke("get-yt-recent-messages"),
 
   getYtSessionParticipants: () => ipcRenderer.invoke("get-yt-session-participants"),
 

@@ -14,7 +14,7 @@ let clockTimer = null;
 let actorToastTimer = null;
 const chatItems = [];
 const pinnedIds = new Set();
-const CHAT_LIMIT = 200;
+const CHAT_LIMIT_FALLBACK = 500;
 
 let actionSheetCtx = null;
 
@@ -441,8 +441,15 @@ function applyState(s) {
   renderSessionHighlights(s.lastSessionLog || null);
   syncPinnedIds(s.pinned || []);
   renderPins(s.pinned || []);
+  if (Array.isArray(s.recentMessages)) replaceChat(s.recentMessages);
   updateMenuBadges();
   updateOnAir();
+}
+
+function chatCap() {
+  const n = Number(state?.suite?.dashboardChatLimit);
+  if (!Number.isFinite(n) || n <= 0) return CHAT_LIMIT_FALLBACK;
+  return Math.max(50, Math.min(2000, Math.round(n)));
 }
 
 function renderPins(list) {
@@ -563,13 +570,28 @@ function buildChatItemEl(msg) {
 
 function appendChat(msg) {
   if (!msg) return;
+  if (msg.id && chatItems.some((m) => m.id === msg.id)) return;
+  const cap = chatCap();
   chatItems.unshift(msg);
-  if (chatItems.length > CHAT_LIMIT) chatItems.length = CHAT_LIMIT;
+  if (chatItems.length > cap) chatItems.length = cap;
   const list = $('chat-list');
   if (list) {
     list.prepend(buildChatItemEl(msg));
-    while (list.children.length > CHAT_LIMIT) list.lastChild?.remove();
+    while (list.children.length > cap) list.lastChild?.remove();
   }
+}
+
+/** 本体の直近コメント（古い順）で一覧を置き換える。接続後に届いた分は残す。 */
+function replaceChat(list) {
+  const cap = chatCap();
+  const incoming = (Array.isArray(list) ? list : []).slice(-cap);
+  const seen = new Set(incoming.map((m) => m?.id).filter(Boolean));
+  const extras = chatItems.filter((m) => m?.id && !seen.has(m.id));
+  chatItems.length = 0;
+  const listEl = $('chat-list');
+  if (listEl) listEl.innerHTML = '';
+  for (const msg of incoming) appendChat(msg);
+  for (const msg of extras.slice().reverse()) appendChat(msg);
 }
 
 function setActiveTab(tab) {
@@ -724,6 +746,9 @@ function handleWs(msg) {
       break;
     case 'yt-message':
       appendChat(msg.data);
+      break;
+    case 'yt-chat-resync':
+      replaceChat(Array.isArray(msg.data) ? msg.data : []);
       break;
     case 'yt-pin-changed':
       if (state) {

@@ -507,7 +507,37 @@ api.on('yt-membership', (msg) => {
 });
 api.on('yt-session-changed', (list) => renderParticipants(list));
 
+function chatHasMessage(id) {
+  if (!id) return false;
+  return !!chatList.querySelector(`[data-msg-id="${CSS.escape(String(id))}"]`);
+}
+
+function renderChatList(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  const stick = chatList.scrollHeight - chatList.scrollTop - chatList.clientHeight < 48;
+  chatList.replaceChildren();
+  const scMessages = [];
+  for (const msg of list) {
+    chatList.appendChild(createMsgElement(msg));
+    if (msg?.superChat) scMessages.push(msg);
+  }
+  while (chatList.children.length > chatLimit) {
+    chatList.removeChild(chatList.firstChild);
+  }
+  scArea.replaceChildren();
+  for (const msg of scMessages.slice(-scLimit)) {
+    scArea.appendChild(createMsgElement(msg));
+  }
+  if (stick) chatList.scrollTop = chatList.scrollHeight;
+  scArea.scrollTop = scArea.scrollHeight;
+}
+
+api.on('yt-chat-resync', (messages) => {
+  renderChatList(messages);
+});
+
 api.on('yt-message', (msg) => {
+  if (chatHasMessage(msg?.id)) return;
   const el = createMsgElement(msg);
 
   if (msg.superChat) {
@@ -1184,6 +1214,8 @@ function bindObsDashboard() {
   const suite = await api.getSuiteFeatures().catch(() => ({}));
   chatLimit = suite.dashboardChatLimit || 500;
   scLimit = suite.dashboardScLimit || 50;
+  const recent = await api.getYtRecentMessages?.().catch(() => []);
+  if (Array.isArray(recent) && recent.length) renderChatList(recent);
 
   api.on('suite-features-changed', (f) => {
     if (!f) return;

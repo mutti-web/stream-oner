@@ -415,6 +415,7 @@
       return ok();
     },
     getYtPinned: () => pass(getPinnedMessages()),
+    getYtRecentMessages: () => pass([]),
     getYtSessionParticipants: () => pass([
       { id: 'UC_preview', name: 'プレビュー視聴者', iconUrl: '', sessionComments: 3 },
       { id: 'UC_regular', name: '常連さん', iconUrl: '', sessionComments: 12 },

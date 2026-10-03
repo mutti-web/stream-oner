@@ -737,6 +737,15 @@ function applyDesktopOverlayFromStore() {
 // ダッシュボードウィンドウ
 // ============================================================
 
+let dashboardChatVisible = false;
+
+function pushDashboardChatResync() {
+  if (!dashboardWindow || dashboardWindow.isDestroyed()) return;
+  try {
+    dashboardWindow.webContents.send('yt-chat-resync', ytManager?.getRecentMessages?.() ?? []);
+  } catch (_) {}
+}
+
 function updateObsDashboardPolling() {
   let visible = false;
   try {
@@ -745,6 +754,9 @@ function updateObsDashboardPolling() {
   } catch (_) {
     visible = false;
   }
+  const becameVisible = visible && !dashboardChatVisible;
+  dashboardChatVisible = visible;
+  if (becameVisible) pushDashboardChatResync();
   if (!visible) {
     obsService?.stopDashboardPolling();
     return;
@@ -1788,6 +1800,7 @@ function setupIpcHandlers() {
   ipcMain.handle('unpin-yt-message', (event, msgId) =>
     ytManager?.unpinMessage(msgId) ?? { success: false, error: 'ytManager未初期化' });
   ipcMain.handle('get-yt-pinned', () => ytManager?.getPinnedMessages() ?? []);
+  ipcMain.handle('get-yt-recent-messages', () => ytManager?.getRecentMessages?.() ?? []);
   ipcMain.handle('get-yt-session-participants', () =>
     ytManager?.getSessionParticipants() ?? []);
   ipcMain.handle('get-yt-viewer-detail', (event, channelId) =>
@@ -2148,6 +2161,9 @@ function setupYtBridge() {
   ytManager.on('session-changed', (participants) => {
     if (!isYoutubeFeatureEnabled()) return;
     broadcastToDashboard('yt-session-changed', participants);
+  });
+  ytManager.on('chat-buffer-cleared', () => {
+    broadcastToDashboard('yt-chat-resync', []);
   });
 }
 

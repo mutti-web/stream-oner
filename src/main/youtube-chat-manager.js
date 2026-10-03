@@ -23,6 +23,7 @@ const { WebSocketServer } = require('ws');
 const { app } = require('electron'); // 追加
 
 const YouTubeChatPoller = require('./youtube-api');
+const { clampDashboardChatLimit } = require('./suite-feature-limits');
 const normalizeChatSource = YouTubeChatPoller.normalizeChatSource;
 const ViewerDB = require('./viewer-db');
 const { isPortAvailable } = require('./port-utils');
@@ -90,6 +91,8 @@ class YouTubeChatManager extends EventEmitter {
     this._status = { pollerRunning: false, serverRunning: false, error: null };
     /** @type {object[]} 最大 MAX_PINNED 件 */
     this._pinnedMessages = [];
+    /** @type {object[]} ダッシュボードとリモートが共有する直近コメント（古い順） */
+    this._recentMessages = [];
     /** @type {Map<string, object>} 今回の配信枠でコメントしたユーザー */
     this._sessionUsers = new Map();
     this._sessionEmitTimer = null;
@@ -422,6 +425,41 @@ class YouTubeChatManager extends EventEmitter {
   // ピン留め（Phase 2）
   // ============================================================
 
+  _recentLimit() {
+    return clampDashboardChatLimit(this._store.get('suite.dashboardChatLimit', 500));
+  }
+
+  /**
+   * フィルタ通過後のコメントを、PC / スマホ共通の履歴として残す。
+   * @param {object} msg
+   */
+  _rememberMessage(msg) {
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.id) {
+      const idx = this._recentMessages.findIndex((m) => m.id === msg.id);
+      if (idx >= 0) this._recentMessages.splice(idx, 1);
+    }
+    this._recentMessages.push(msg);
+    const limit = this._recentLimit();
+    if (this._recentMessages.length > limit) {
+      this._recentMessages.splice(0, this._recentMessages.length - limit);
+    }
+  }
+
+  /** @returns {object[]} 古い順 */
+  getRecentMessages() {
+    const limit = this._recentLimit();
+    if (this._recentMessages.length > limit) {
+      this._recentMessages.splice(0, this._recentMessages.length - limit);
+    }
+    return this._recentMessages.slice();
+  }
+
+  _clearRecentMessages() {
+    this._recentMessages = [];
+    this.emit('chat-buffer-cleared');
+  }
+
   getPinnedMessages() {
     return [...this._pinnedMessages];
   }
@@ -520,6 +558,7 @@ class YouTubeChatManager extends EventEmitter {
     this._trackSessionUser(normalized);
     this._scheduleSessionEmit();
 
+    this._rememberMessage(normalized);
     this._broadcast({ type: 'message', data: normalized });
     this.emit('message', normalized);
   }
@@ -663,6 +702,8 @@ class YouTubeChatManager extends EventEmitter {
       return { success: false, error: err };
     }
 
+    this._clearRecentMessages();
+
     const batchLimit = Math.max(
       1,
       Math.min(200, Number(this._store.get(K.batchProcessLimit, DEFAULT_BATCH_PROCESS_LIMIT)) || DEFAULT_BATCH_PROCESS_LIMIT),
@@ -690,6 +731,7 @@ class YouTubeChatManager extends EventEmitter {
         this._trackSessionUser(msg);
         sessionUpdated = true;
 
+        this._rememberMessage(msg);
         this._broadcast({ type: 'message', data: msg });
         this.emit('message', msg);
       }
