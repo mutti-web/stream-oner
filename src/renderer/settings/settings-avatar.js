@@ -125,12 +125,24 @@ function readReactionsList(prefix) {
   }
 }
 
+function applyReactionFlip(flipEl, on) {
+  if (!flipEl) return;
+  const value = !!on;
+  // shim 前に .checked を代入すると own property になり、selected に届かない
+  window.appUI?.patchSwitch?.(flipEl);
+  if (value) flipEl.setAttribute('selected', '');
+  else flipEl.removeAttribute('selected');
+  flipEl.checked = value;
+  if (!flipEl.__checkedShim) flipEl.selected = value;
+}
+
 function createReactionRow(prefix, reaction = {}) {
   const row = document.createElement('div');
   row.className = 'av-reaction-row';
   row.dataset.reactionRow = '1';
   row.dataset.reactionId = reaction.id || newReactionId();
   const dur = Number(reaction.durationMs) || REACTION_DEFAULT_MS;
+  const flipped = !!reaction.flipX;
   row.innerHTML =
     '<div class="av-reaction-row-main">' +
       '<img class="av-reaction-thumb" alt="" hidden />' +
@@ -144,7 +156,7 @@ function createReactionRow(prefix, reaction = {}) {
           '<md-outlined-text-field data-reaction-k="durationMs" label="表示秒数" type="number" min="1" max="30" step="1"></md-outlined-text-field>' +
           '<label class="app-row app-row-compact app-toggle-inline">' +
             '<span class="app-toggle-name">水平反転</span>' +
-            '<md-switch data-reaction-k="flipX" icons show-only-selected-icon></md-switch>' +
+            '<md-switch data-reaction-k="flipX"' + (flipped ? ' selected' : '') + ' icons show-only-selected-icon></md-switch>' +
           '</label>' +
         '</div>' +
       '</div>' +
@@ -155,8 +167,7 @@ function createReactionRow(prefix, reaction = {}) {
   row.querySelector('[data-reaction-k="label"]').value = reaction.label || '';
   row.querySelector('[data-reaction-k="path"]').value = reaction.path || '';
   row.querySelector('[data-reaction-k="durationMs"]').value = String(Math.round(dur / 1000));
-  const flipEl = row.querySelector('[data-reaction-k="flipX"]');
-  if (flipEl) flipEl.checked = !!reaction.flipX;
+  applyReactionFlip(row.querySelector('[data-reaction-k="flipX"]'), flipped);
   updateReactionThumb(row);
   return row;
 }
@@ -169,8 +180,13 @@ function renderReactionsList(prefix, reactions) {
   for (const r of items) {
     list.appendChild(createReactionRow(prefix, r));
   }
+  window.appUI?.patchAllSwitches?.(list);
+  list.querySelectorAll('[data-reaction-row]').forEach((row) => {
+    const flipEl = row.querySelector('[data-reaction-k="flipX"]');
+    if (!flipEl) return;
+    applyReactionFlip(flipEl, flipEl.hasAttribute('selected') || !!flipEl.selected);
+  });
   syncReactionsJson(prefix);
-  window.appUI?.patchAllSwitches?.();
 }
 
 function buildAvatarPayload(opts = {}) {
