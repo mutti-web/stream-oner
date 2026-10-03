@@ -279,6 +279,8 @@
       container.className = '';
       container.classList.add(display?.position || 'bottom-right');
       if (display?.animMode === 'fade-in') container.classList.add('anim-fade-in');
+      // 表示中コメントの残り時間も新しい表示秒数に合わせる
+      rescheduleVisibleItems();
     }
 
     function resolveSuperChatTier(msg) {
@@ -307,11 +309,10 @@
       return tier;
     }
 
-    // ============================================================
-    // コメント追加
-    // ============================================================
-    function addMessage(msg) {
-      const maxComments  = cfg?.display?.maxComments   ?? 8;
+    // 表示開始時刻と元メッセージ。設定変更時に残り時間を計算し直す。
+    const liveItems = new WeakMap();
+
+    function durationForMessage(msg) {
       // 0 以下 = 時間では消さない（件数溢れのみ）。未設定時のみ既定 8000。
       let showDuration = Number(cfg?.display?.showDurationMs);
       if (!Number.isFinite(showDuration)) showDuration = 8000;
@@ -322,8 +323,42 @@
         const tierMs = Number(tier?.durationMs);
         if (Number.isFinite(tierMs) && tierMs > 0) showDuration = tierMs;
       }
+      return showDuration;
+    }
+
+    function clearItemTimer(el) {
+      const meta = liveItems.get(el);
+      if (!meta?.timerId) return;
+      clearTimeout(meta.timerId);
+      meta.timerId = 0;
+    }
+
+    function scheduleItem(el) {
+      const meta = liveItems.get(el);
+      if (!meta || el.classList.contains('removing')) return;
+      clearItemTimer(el);
+      const duration = durationForMessage(meta.msg);
+      if (!(duration > 0)) return;
+      const remaining = duration - (Date.now() - meta.shownAt);
+      if (remaining <= 0) {
+        removeItem(el);
+        return;
+      }
+      meta.timerId = setTimeout(() => removeItem(el), remaining);
+    }
+
+    function rescheduleVisibleItems() {
+      container.querySelectorAll('.chat-item:not(.removing)').forEach(scheduleItem);
+    }
+
+    // ============================================================
+    // コメント追加
+    // ============================================================
+    function addMessage(msg) {
+      const maxComments  = cfg?.display?.maxComments   ?? 8;
 
       const el = createChatItem(msg);
+      liveItems.set(el, { shownAt: Date.now(), msg, timerId: 0 });
       container.appendChild(el);
 
       const items = container.querySelectorAll('.chat-item:not(.removing)');
@@ -332,9 +367,7 @@
         for (let i = 0; i < overflow; i++) removeItem(items[i]);
       }
 
-      if (showDuration > 0) {
-        setTimeout(() => removeItem(el), showDuration);
-      }
+      scheduleItem(el);
     }
 
     function setPins(list) {
@@ -477,6 +510,7 @@
 
     function removeItem(item) {
       if (!item || item.classList.contains('removing')) return;
+      clearItemTimer(item);
       item.classList.add('removing');
       item.addEventListener('animationend', () => item.remove(), { once: true });
     }
