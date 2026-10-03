@@ -62,7 +62,7 @@ function buildInitialSetupSteps(ctx) {
       id: 'youtube',
       label: oauthLinked ? 'YouTube 連携を確認' : 'チャット用の動画 ID を確認',
       desc: oauthLinked
-        ? `連携済み（${ytOAuth.channelTitle || 'チャンネル'}）。配信開始後はダッシュボードで自動検出`
+        ? `連携済み（${ytOAuth.channelTitle || 'チャンネル'}）。OBS の配信開始で動画 ID を自動入力`
         : videoReady
           ? '動画 ID 設定済み。接続タブで YouTube 連携すると ID 入力を省略可能'
           : '接続タブで YouTube と連携（推奨）。手動ならダッシュボードで動画 ID を入力',

@@ -290,6 +290,12 @@ class RemoteDashboardServer {
         res.end(JSON.stringify(r));
         return;
       }
+      if (req.method === 'POST' && urlPath === '/remote/yt/video-id') {
+        const r = await this._api.ytSetVideoId(actor, body.videoId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(r));
+        return;
+      }
       if (req.method === 'POST' && urlPath === '/remote/yt/confirm-start') {
         const r = await this._api.ytConfirmStart(actor, body.videoId);
         res.writeHead(200, { 'Content-Type': 'application/json' });

@@ -384,6 +384,7 @@ function ensureRemoteServer() {
       broadcastYtConfigChanged,
       getYoutubeChatStartCoordinator: () => ensureYtChatStartCoordinator(),
       getOAuthManager: () => ensureYtOAuthManager(),
+      getVideoAutofill: () => ytVideoAutofill?.getLast?.() ?? { status: 'idle', seq: 0, message: '' },
     }));
     remoteServer = new RemoteDashboardServer({
       store,
@@ -738,6 +739,9 @@ function applyDesktopOverlayFromStore() {
 // ============================================================
 
 let dashboardChatVisible = false;
+let obsWasStreaming = false;
+/** @type {ReturnType<import('./youtube-video-id-autofill').createYoutubeVideoIdAutofill> | null} */
+let ytVideoAutofill = null;
 
 function pushDashboardChatResync() {
   if (!dashboardWindow || dashboardWindow.isDestroyed()) return;
@@ -1801,6 +1805,7 @@ function setupIpcHandlers() {
     ytManager?.unpinMessage(msgId) ?? { success: false, error: 'ytManager未初期化' });
   ipcMain.handle('get-yt-pinned', () => ytManager?.getPinnedMessages() ?? []);
   ipcMain.handle('get-yt-recent-messages', () => ytManager?.getRecentMessages?.() ?? []);
+  ipcMain.handle('get-yt-video-autofill', () => ytVideoAutofill?.getLast?.() ?? { status: 'idle', seq: 0, message: '' });
   ipcMain.handle('get-yt-session-participants', () =>
     ytManager?.getSessionParticipants() ?? []);
   ipcMain.handle('get-yt-viewer-detail', (event, channelId) =>
@@ -2017,6 +2022,38 @@ function setupIpcHandlers() {
 // RPC → オーバーレイ / WebSocket へブロードキャスト
 // ============================================================
 
+function ensureYtVideoAutofill() {
+  if (!ytVideoAutofill) {
+    const { createYoutubeVideoIdAutofill } = require('./youtube-video-id-autofill');
+    ytVideoAutofill = createYoutubeVideoIdAutofill({
+      isEnabled: isYoutubeFeatureEnabled,
+      getOAuthStatus: () => ensureYtOAuthManager().getStatus(),
+      resolveActiveBroadcasts: () => ensureYtLiveResolver().resolveActiveBroadcasts(),
+      getCurrentVideoId: () => ytManager?.getConfig?.()?.videoId || store.get('yt.videoId', ''),
+      saveVideoId: (videoId) => {
+        ensureYtManager().saveConfig({ videoId });
+        broadcastTimer?.onVideoIdChanged?.(videoId);
+        broadcastYtConfigChanged();
+      },
+      isPollerRunning: () => !!ytManager?.getStatus?.()?.pollerRunning,
+      notify: (result) => broadcastToDashboard('yt-video-autofill', result),
+    });
+  }
+  return ytVideoAutofill;
+}
+
+function handleObsStreamingForVideoId(data) {
+  const streaming = !!data?.streaming;
+  if (streaming && !obsWasStreaming) {
+    ensureYtVideoAutofill().onStreamingStarted().catch((err) => {
+      console.warn('[YT] 動画 ID の自動入力に失敗:', err?.message || err);
+    });
+  } else if (!streaming && obsWasStreaming) {
+    ytVideoAutofill?.onStreamingStopped();
+  }
+  obsWasStreaming = streaming;
+}
+
 function broadcastToOverlay(channel, data) {
   if (overlayWindow  && !overlayWindow.isDestroyed())  overlayWindow.webContents.send(channel, data);
   if (settingsWindow && !settingsWindow.isDestroyed()) settingsWindow.webContents.send(channel, data);
@@ -2030,7 +2067,10 @@ function attachObsBridge(service) {
       settingsWindow.webContents.send('obs-connection-changed', data);
     }
   });
-  service.on('output-state-changed', forward('obs-output-state-changed'));
+  service.on('output-state-changed', (data) => {
+    forward('obs-output-state-changed')(data);
+    handleObsStreamingForVideoId(data);
+  });
   service.on('scene-changed', forward('obs-scene-changed'));
   service.on('mute-state-changed', forward('obs-mute-state-changed'));
 }

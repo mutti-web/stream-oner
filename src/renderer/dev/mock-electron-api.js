@@ -416,6 +416,7 @@
     },
     getYtPinned: () => pass(getPinnedMessages()),
     getYtRecentMessages: () => pass([]),
+    getYtVideoAutofill: () => pass({ status: 'idle', seq: 0, message: '' }),
     getYtSessionParticipants: () => pass([
       { id: 'UC_preview', name: 'プレビュー視聴者', iconUrl: '', sessionComments: 3 },
       { id: 'UC_regular', name: '常連さん', iconUrl: '', sessionComments: 12 },

@@ -31,6 +31,7 @@ const REMOTE_ACTION_LABELS = {
   'obs-scene': 'シーンを変更',
   'yt-start': 'チャット取得を開始',
   'yt-confirm-start': 'チャット取得を開始',
+  'yt-set-video-id': '動画 ID を更新',
   'yt-stop': 'チャット取得を停止',
   'yt-nudge-dismiss': '案内を非表示に設定',
   'suite-flags': '配信表示を変更',
@@ -442,8 +443,52 @@ function applyState(s) {
   syncPinnedIds(s.pinned || []);
   renderPins(s.pinned || []);
   if (Array.isArray(s.recentMessages)) replaceChat(s.recentMessages);
+  if (s.videoAutofill) applyVideoAutofill(s.videoAutofill);
   updateMenuBadges();
   updateOnAir();
+}
+
+let seenAutofillSeq = 0;
+let autofillPickOpen = false;
+
+function showAutofillToast(message) {
+  const el = $('actor-toast');
+  if (!el || !message) return;
+  el.textContent = message;
+  el.hidden = false;
+  if (actorToastTimer) clearTimeout(actorToastTimer);
+  actorToastTimer = setTimeout(() => {
+    el.hidden = true;
+  }, 6000);
+}
+
+async function applyVideoAutofill(result) {
+  if (!result?.status || result.status === 'idle') return;
+  const seq = Number(result.seq) || 0;
+  if (seq && seq <= seenAutofillSeq) return;
+  if (seq) seenAutofillSeq = seq;
+  if (result.message) showAutofillToast(result.message);
+  if (result.status !== 'multiple' || autofillPickOpen || !window.RemoteYtStartUi) return;
+  autofillPickOpen = true;
+  try {
+    const ui = window.RemoteYtStartUi.createRemoteYtStartUi({});
+    const picked = await ui.pickMultiple(result.broadcasts || [], {
+      title: '動画 ID を選択',
+      body: '配信が複数あります。動画 ID に入れる配信を選んでください。チャット取得は始まりません。',
+    });
+    if (!picked?.videoId) return;
+    const r = await api('/remote/yt/video-id', {
+      method: 'POST',
+      body: JSON.stringify({ videoId: picked.videoId }),
+    });
+    if (r?.success) {
+      showAutofillToast(`動画 ID を入れました（${picked.title || picked.videoId}）`);
+    } else if (r?.error) {
+      showAutofillToast(r.error);
+    }
+  } finally {
+    autofillPickOpen = false;
+  }
 }
 
 function chatCap() {
@@ -749,6 +794,9 @@ function handleWs(msg) {
       break;
     case 'yt-chat-resync':
       replaceChat(Array.isArray(msg.data) ? msg.data : []);
+      break;
+    case 'yt-video-autofill':
+      applyVideoAutofill(msg.data);
       break;
     case 'yt-pin-changed':
       if (state) {

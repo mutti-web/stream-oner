@@ -536,6 +536,10 @@ api.on('yt-chat-resync', (messages) => {
   renderChatList(messages);
 });
 
+api.on('yt-video-autofill', (result) => {
+  applyYtVideoAutofill(result).catch(() => {});
+});
+
 api.on('yt-message', (msg) => {
   if (chatHasMessage(msg?.id)) return;
   const el = createMsgElement(msg);
@@ -706,6 +710,7 @@ const REMOTE_ACTION_LABELS = {
   'obs-scene': 'シーンを変更',
   'yt-start': 'チャット取得を開始',
   'yt-confirm-start': 'チャット取得を開始',
+  'yt-set-video-id': '動画 ID を更新',
   'yt-stop': 'チャット取得を停止',
   'yt-nudge-dismiss': '案内を非表示に設定',
   'suite-flags': '配信表示を変更',
@@ -731,6 +736,63 @@ function formatRemoteActionToast(data = {}) {
     return `${who}がシーンを「${detail}」に変更`;
   }
   return `${who}が${base}`;
+}
+
+let seenAutofillSeq = 0;
+let autofillPickOpen = false;
+
+function showAutofillToast(message, ms = 6000) {
+  if (!remoteActorToastEl || !message) return;
+  remoteActorToastEl.textContent = message;
+  remoteActorToastEl.hidden = false;
+  if (remoteActorToastTimer) clearTimeout(remoteActorToastTimer);
+  remoteActorToastTimer = setTimeout(() => {
+    remoteActorToastEl.hidden = true;
+  }, ms);
+}
+
+async function applyYtVideoAutofill(result) {
+  if (!result?.status || result.status === 'idle') return;
+  const seq = Number(result.seq) || 0;
+  if (seq && seq <= seenAutofillSeq) return;
+  if (seq) seenAutofillSeq = seq;
+
+  if (result.status === 'filled') {
+    showAutofillToast(result.message, 4000);
+    return;
+  }
+  if (result.status === 'searching' || result.status === 'not_found' || result.status === 'needs_link') {
+    showAutofillToast(result.message, result.status === 'searching' ? 4000 : 8000);
+    if (result.status === 'not_found' && !result.keptVideoId) {
+      document.getElementById('dash-yt-video-details')?.setAttribute('open', '');
+      dashYtVideoId?.focus();
+    }
+    return;
+  }
+  if (result.status !== 'multiple' || autofillPickOpen || !window.DashboardYtStartUi) {
+    if (result.message) showAutofillToast(result.message, 8000);
+    return;
+  }
+
+  showAutofillToast(result.message, 8000);
+  autofillPickOpen = true;
+  try {
+    const ui = window.DashboardYtStartUi.createDashboardYtStartUi(api);
+    const picked = await ui.pickMultiple(result.broadcasts || [], {
+      title: '動画 ID を選択',
+      body: '配信が複数あります。動画 ID に入れる配信を選んでください。チャット取得は始まりません。',
+    });
+    if (!picked?.videoId) return;
+    const r = await applyYtVideoIdToConfig(picked.videoId);
+    if (r?.success) {
+      ytConfigCache.videoId = picked.videoId;
+      if (dashYtVideoId) dashYtVideoId.value = picked.videoId;
+      updateYtVideoSummary();
+      showAutofillToast(`動画 ID を入れました（${picked.title || picked.videoId}）`, 4000);
+    }
+  } finally {
+    autofillPickOpen = false;
+  }
 }
 
 function showRemoteActorToast(data) {
@@ -1216,6 +1278,8 @@ function bindObsDashboard() {
   scLimit = suite.dashboardScLimit || 50;
   const recent = await api.getYtRecentMessages?.().catch(() => []);
   if (Array.isArray(recent) && recent.length) renderChatList(recent);
+  const autofill = await api.getYtVideoAutofill?.().catch(() => null);
+  if (autofill) applyYtVideoAutofill(autofill).catch(() => {});
 
   api.on('suite-features-changed', (f) => {
     if (!f) return;

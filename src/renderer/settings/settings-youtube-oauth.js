@@ -56,9 +56,9 @@ function setYtOAuthUi(status, opts = {}) {
       const name = String(_ytOAuthStatus.channelTitle || '').trim();
       hint.textContent = name
         ? `連携チャンネル: ${name}`
-        : '連携済みです。配信開始後にダッシュボードからチャット取得を始めると、動画 ID を自動検出します。';
+        : '連携済みです。OBS で配信を始めると、動画 ID が自動で入ります。';
     } else {
-      hint.textContent = '推奨: 連携すると動画 ID の手入力が不要になります。手動の場合は下の「手動設定」を開いてください。';
+      hint.textContent = '推奨: 連携すると、OBS の配信開始で動画 ID が入ります。手動の場合は下の「手動設定」を開いてください。';
     }
   }
 

@@ -84,10 +84,13 @@
         });
       },
 
-      async pickMultiple(broadcasts) {
+      async pickMultiple(broadcasts, options = {}) {
         return waitModalAction((resolve) => {
-          if (titleEl()) titleEl().textContent = '配信を選択';
-          if (bodyEl()) bodyEl().textContent = '同時に配信中のライブが複数あります。取得する配信を選んでください。';
+          if (titleEl()) titleEl().textContent = options.title || '配信を選択';
+          if (bodyEl()) {
+            bodyEl().textContent = options.body
+              || '同時に配信中のライブが複数あります。取得する配信を選んでください。';
+          }
           const list = pickListEl();
           if (list) {
             list.hidden = false;

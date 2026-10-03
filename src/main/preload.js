@@ -47,6 +47,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   "unpin-yt-message",
   "get-yt-pinned",
   "get-yt-recent-messages",
+  "get-yt-video-autofill",
   "get-yt-session-participants",
   "get-yt-viewer-detail",
   "clear-yt-session",
@@ -108,6 +109,7 @@ const ALLOWED_RECEIVE_CHANNELS = [
   "yt-status-changed",      // YouTubeポーラー状態の変化
   "yt-message",             // YouTubeチャットメッセージ
   "yt-chat-resync",         // 直近コメントの再同期
+  "yt-video-autofill",      // OBS 配信開始時の動画 ID 自動入力
   "yt-pin-changed",         // ピン留め状態の変化
   "yt-membership",          // メンバーシップ系システムメッセージ
   "yt-session-changed",     // 参加者一覧の更新
@@ -277,6 +279,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   /** PC / スマホ共通の直近コメント（古い順） */
   getYtRecentMessages: () => ipcRenderer.invoke("get-yt-recent-messages"),
+
+  /** OBS 配信開始時の動画 ID 自動入力の直近結果 */
+  getYtVideoAutofill: () => ipcRenderer.invoke("get-yt-video-autofill"),
 
   getYtSessionParticipants: () => ipcRenderer.invoke("get-yt-session-participants"),
 

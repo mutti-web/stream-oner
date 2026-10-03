@@ -94,6 +94,7 @@ class RemoteDashboardApi {
       timer,
       pinned: d.ytManager?.getPinnedMessages?.() ?? [],
       recentMessages: d.ytManager?.getRecentMessages?.() ?? [],
+      videoAutofill: d.getVideoAutofill?.() ?? { status: 'idle', seq: 0, message: '' },
       participants: d.ytManager?.getSessionParticipants?.() ?? [],
       sessionLog: d.getSessionLogManager?.()?.getStatus?.() ?? { active: false },
       lastSessionLog: d.getSessionLogManager?.()?.getLastSession?.() ?? null,
@@ -189,6 +190,20 @@ class RemoteDashboardApi {
     const coord = d.getYoutubeChatStartCoordinator?.();
     if (!coord) return { step: 'error', error: 'YouTube 未初期化' };
     return coord.prepareStart();
+  }
+
+  async ytSetVideoId(actor, videoId) {
+    this._log(actor, 'yt-set-video-id', videoId);
+    const vid = String(videoId || '').trim();
+    if (!vid) return { success: false, error: '動画 ID が空です' };
+    const d = this._getDeps();
+    const yt = d.ytManager;
+    if (!yt?.saveConfig) return { success: false, error: 'YouTube 未初期化' };
+    yt.saveConfig({ videoId: vid });
+    d.broadcastTimer?.onVideoIdChanged?.(vid);
+    d.broadcastYtConfigChanged?.();
+    this._notifyAction(actor, 'yt-set-video-id', vid);
+    return { success: true, videoId: vid };
   }
 
   async ytConfirmStart(actor, videoId) {
