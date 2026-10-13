@@ -116,7 +116,7 @@ function readRoleBadgeFields() {
 
 function buildYtOverlayPayload() {
   return {
-    maxComments: Number(readMdValue(document.getElementById('yt-max'))),
+    maxComments: Math.max(1, Math.min(20, Number(readMdValue(document.getElementById('yt-max'))) || 8)),
     showDurationMs: normalizeShowDurationMs(readMdValue(document.getElementById('yt-duration'))),
     animMode: readMdValue(document.getElementById('yt-anim')),
     position: readMdValue(document.getElementById('yt-pos')),
@@ -141,7 +141,7 @@ function buildYtPayload() {
     videoId: String(ytConfigCache?.videoId || '').trim(),
     chatSource: readMdValue(document.getElementById('yt-chat-source')) || 'auto',
     pollingIntervalMs: Number(readMdValue(document.getElementById('yt-interval'))),
-    maxComments: Number(readMdValue(document.getElementById('yt-max'))),
+    maxComments: Math.max(1, Math.min(20, Number(readMdValue(document.getElementById('yt-max'))) || 8)),
     showDurationMs: normalizeShowDurationMs(readMdValue(document.getElementById('yt-duration'))),
     animMode: readMdValue(document.getElementById('yt-anim')),
     position: readMdValue(document.getElementById('yt-pos')),

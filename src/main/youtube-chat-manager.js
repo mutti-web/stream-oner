@@ -103,13 +103,15 @@ class YouTubeChatManager extends EventEmitter {
 
   _updateFilterCache() {
     const s = this._store;
+    const ngWords = s.get(K.ngWords, []);
+    const ngUserIds = s.get(K.ngUserIds, []);
     this._filterCache = {
-      ngWords:          s.get(K.ngWords,     []),
-      ngUserIds:        s.get(K.ngUserIds,   []),
+      ngWords: Array.isArray(ngWords) ? ngWords : [],
+      ngUserIds: Array.isArray(ngUserIds) ? ngUserIds : [],
       allowMembersOnly: s.get(K.allowMembers, false),
       showSuperChatOnly: s.get(K.superChatOnly, false),
       hideBotCommands:  s.get(K.hideBotCmds, true),
-      botCommandPrefix: s.get(K.botPrefix,   '!'),
+      botCommandPrefix: String(s.get(K.botPrefix, '!') || '!'),
     };
   }
 
@@ -131,7 +133,7 @@ class YouTubeChatManager extends EventEmitter {
         pollingIntervalMs: s.get(K.pollingInterval, 5000),
       },
       display: {
-        maxComments:   s.get(K.maxComments,  8),
+        maxComments:   Math.max(1, Math.min(20, Number(s.get(K.maxComments, 8)) || 8)),
         showDurationMs: s.get(K.showDuration, 8000),
         animMode:      s.get(K.animMode,     'slide-up'),
         position:      s.get(K.position,     'bottom-right'),
@@ -187,7 +189,7 @@ class YouTubeChatManager extends EventEmitter {
       hasApiKey:        !!s.getSecret(K.apiKey, ''),
       chatSource:       normalizeChatSource(s.get(K.chatSource, 'auto')),
       pollingIntervalMs: s.get(K.pollingInterval, 5000),
-      maxComments:      s.get(K.maxComments,  8),
+      maxComments:      Math.max(1, Math.min(20, Number(s.get(K.maxComments, 8)) || 8)),
       showDurationMs:   s.get(K.showDuration, 8000),
       animMode:         s.get(K.animMode,     'slide-up'),
       position:         s.get(K.position,     'bottom-right'),
@@ -231,7 +233,10 @@ class YouTubeChatManager extends EventEmitter {
     if (settings.apiKey)                          s.setSecret(K.apiKey,         settings.apiKey);
     if (settings.chatSource       !== undefined) s.set(K.chatSource, normalizeChatSource(settings.chatSource));
     if (settings.pollingIntervalMs !== undefined) s.set(K.pollingInterval, settings.pollingIntervalMs);
-    if (settings.maxComments       !== undefined) s.set(K.maxComments,    settings.maxComments);
+    if (settings.maxComments       !== undefined) {
+      const n = Number(settings.maxComments);
+      s.set(K.maxComments, Math.max(1, Math.min(20, Number.isFinite(n) ? n : 8)));
+    }
     if (settings.showDurationMs    !== undefined) {
       // 0 以下 = オーバーレイで永久表示（件数溢れのみ削除）
       const n = Number(settings.showDurationMs);
@@ -316,16 +321,19 @@ class YouTubeChatManager extends EventEmitter {
   }
 
   _passesFilter(msg) {
+    if (!msg || typeof msg !== 'object') return false;
     if (this._isMembershipEvent(msg)) return true;
     const f = this._filterCache;
-    if (f.ngUserIds.includes(msg.author.id)) return false;
+    const author = msg.author || {};
+    const text = String(msg.text ?? '');
+    if (author.id && f.ngUserIds.includes(author.id)) return false;
     if (f.ngWords.length > 0) {
-      const lower = msg.text.toLowerCase();
-      if (f.ngWords.some(w => lower.includes(w.toLowerCase()))) return false;
+      const lower = text.toLowerCase();
+      if (f.ngWords.some((w) => lower.includes(String(w || '').toLowerCase()))) return false;
     }
-    if (f.allowMembersOnly  && !msg.author.isMember && !msg.author.isOwner) return false;
+    if (f.allowMembersOnly && !author.isMember && !author.isOwner) return false;
     if (f.showSuperChatOnly && !msg.superChat) return false;
-    if (f.hideBotCommands   && msg.text.startsWith(f.botCommandPrefix))    return false;
+    if (f.hideBotCommands && text.startsWith(f.botCommandPrefix)) return false;
     return true;
   }
 
@@ -522,9 +530,20 @@ class YouTubeChatManager extends EventEmitter {
   // ============================================================
 
   _broadcast(data) {
-    const json = JSON.stringify(data);
+    let json;
+    try {
+      json = JSON.stringify(data);
+    } catch (e) {
+      console.warn('[YT-WS] 送信データのシリアライズに失敗:', e.message);
+      return;
+    }
     for (const ws of this._clients) {
-      if (ws.readyState === ws.OPEN) ws.send(json);
+      if (ws.readyState !== ws.OPEN) continue;
+      try {
+        ws.send(json);
+      } catch (e) {
+        console.warn('[YT-WS] 送信失敗:', e.message);
+      }
     }
   }
 
@@ -710,30 +729,43 @@ class YouTubeChatManager extends EventEmitter {
     );
 
     this._poller = new YouTubeChatPoller(cfg.youtube, (messages) => {
-      const filtered = messages.filter((m) => this._passesFilter(m));
+      let filtered;
+      try {
+        filtered = (Array.isArray(messages) ? messages : []).filter((m) => this._passesFilter(m));
+      } catch (e) {
+        console.error('[YT-Poller] フィルタ処理エラー:', e.message);
+        return;
+      }
       const toProcess = filtered.length > batchLimit
         ? filtered.slice(-batchLimit)
         : filtered;
       const threshold = this._store.get(K.badgeThreshold, 10);
       let sessionUpdated = false;
       for (const msg of toProcess) {
-        if (this._isMembershipEvent(msg)) {
-          this._broadcast({ type: 'membership', data: msg });
-          this.emit('membership-event', msg);
-          continue;
+        try {
+          if (this._isMembershipEvent(msg)) {
+            this._broadcast({ type: 'membership', data: msg });
+            this.emit('membership-event', msg);
+            continue;
+          }
+
+          if (!msg.author || typeof msg.author !== 'object') {
+            msg.author = { name: '—', id: '', isModerator: false, isMember: false, isOwner: false, iconUrl: '' };
+          }
+          const stats = this._viewerDb.trackUser(msg.author.id, msg.author.name);
+          msg.author.isFirstTime = stats.isFirstTime;
+          msg.author.commentCount = stats.commentCount;
+          msg.author.isRegular = stats.commentCount >= threshold;
+
+          this._trackSessionUser(msg);
+          sessionUpdated = true;
+
+          this._rememberMessage(msg);
+          this._broadcast({ type: 'message', data: msg });
+          this.emit('message', msg);
+        } catch (e) {
+          console.error('[YT-Poller] 1件のメッセージ処理に失敗:', e.message);
         }
-
-        const stats = this._viewerDb.trackUser(msg.author.id, msg.author.name);
-        msg.author.isFirstTime = stats.isFirstTime;
-        msg.author.commentCount = stats.commentCount;
-        msg.author.isRegular = stats.commentCount >= threshold;
-
-        this._trackSessionUser(msg);
-        sessionUpdated = true;
-
-        this._rememberMessage(msg);
-        this._broadcast({ type: 'message', data: msg });
-        this.emit('message', msg);
       }
       if (sessionUpdated) this._scheduleSessionEmit();
     });

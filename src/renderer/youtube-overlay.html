@@ -355,7 +355,7 @@
     // コメント追加
     // ============================================================
     function addMessage(msg) {
-      const maxComments  = cfg?.display?.maxComments   ?? 8;
+      const maxComments  = Math.max(1, Number(cfg?.display?.maxComments) || 8);
 
       const el = createChatItem(msg);
       liveItems.set(el, { shownAt: Date.now(), msg, timerId: 0 });

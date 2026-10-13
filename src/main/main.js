@@ -2182,17 +2182,25 @@ function setupYtBridge() {
     updateTrayMenu();
   });
   ytManager.on('message', (msg) => {
-    if (!isYoutubeFeatureEnabled()) return;
-    ensureSessionLogManager().recordMessage(msg);
-    broadcastToDashboard('yt-message', msg);
-    const rules = store.get(obsEventDispatcher.STORE_KEY, []);
-    obsEventDispatcher.dispatchObsEventActions(rules, ensureObsService(), { type: 'message', msg });
+    try {
+      if (!isYoutubeFeatureEnabled()) return;
+      ensureSessionLogManager().recordMessage(msg);
+      broadcastToDashboard('yt-message', msg);
+      const rules = store.get(obsEventDispatcher.STORE_KEY, []);
+      obsEventDispatcher.dispatchObsEventActions(rules, ensureObsService(), { type: 'message', msg });
+    } catch (e) {
+      console.warn('[YT] message 配信エラー:', e?.message || e);
+    }
   });
   ytManager.on('membership-event', (msg) => {
-    if (!isYoutubeFeatureEnabled()) return;
-    broadcastToDashboard('yt-membership', msg);
-    const rules = store.get(obsEventDispatcher.STORE_KEY, []);
-    obsEventDispatcher.dispatchObsEventActions(rules, ensureObsService(), { type: 'membership', msg });
+    try {
+      if (!isYoutubeFeatureEnabled()) return;
+      broadcastToDashboard('yt-membership', msg);
+      const rules = store.get(obsEventDispatcher.STORE_KEY, []);
+      obsEventDispatcher.dispatchObsEventActions(rules, ensureObsService(), { type: 'membership', msg });
+    } catch (e) {
+      console.warn('[YT] membership 配信エラー:', e?.message || e);
+    }
   });
   ytManager.on('pin-changed', (list) => {
     if (!isYoutubeFeatureEnabled()) return;

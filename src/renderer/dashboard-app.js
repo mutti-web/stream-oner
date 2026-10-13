@@ -509,7 +509,11 @@ api.on('yt-session-changed', (list) => renderParticipants(list));
 
 function chatHasMessage(id) {
   if (!id) return false;
-  return !!chatList.querySelector(`[data-msg-id="${CSS.escape(String(id))}"]`);
+  const want = String(id);
+  for (const el of chatList.children) {
+    if (el.dataset?.msgId === want) return true;
+  }
+  return false;
 }
 
 function renderChatList(messages) {

@@ -3,13 +3,10 @@
 const https = require('https');
 
 const INNERTUBE_HOST = 'www.youtube.com';
-const INNERTUBE_CLIENT = {
-  clientName: 'WEB',
-  clientVersion: '2.20250226.01.00',
-  hl: 'ja',
-  gl: 'JP',
-  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-};
+/** watch ページから取れないときだけ使うフォールバック（常に HTML の版を優先） */
+const INNERTUBE_CLIENT_VERSION_FALLBACK = '2.20261012.01.00';
+const INNERTUBE_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 const CHAT_SOURCES = new Set(['auto', 'innertube', 'dataapi']);
 
@@ -28,6 +25,40 @@ function extractInnertubeApiKeyFromHtml(html) {
   const patterns = [
     /"INNERTUBE_API_KEY"\s*:\s*"([A-Za-z0-9_-]+)"/,
     /'INNERTUBE_API_KEY'\s*:\s*'([A-Za-z0-9_-]+)'/,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m?.[1]) return m[1];
+  }
+  return '';
+}
+
+/**
+ * @param {string} html
+ * @returns {string}
+ */
+function extractInnertubeClientVersionFromHtml(html) {
+  if (!html) return '';
+  const patterns = [
+    /"INNERTUBE_CLIENT_VERSION"\s*:\s*"([^"]+)"/,
+    /'INNERTUBE_CLIENT_VERSION'\s*:\s*'([^']+)'/,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m?.[1]) return m[1];
+  }
+  return '';
+}
+
+/**
+ * @param {string} html
+ * @returns {string}
+ */
+function extractVisitorDataFromHtml(html) {
+  if (!html) return '';
+  const patterns = [
+    /"VISITOR_DATA"\s*:\s*"([^"]+)"/,
+    /"visitorData"\s*:\s*"([^"]+)"/,
   ];
   for (const re of patterns) {
     const m = html.match(re);
@@ -60,6 +91,20 @@ class YouTubeChatPoller {
     this.activeBackend = null;
     /** InnerTube POST 用。watch HTML から実行時取得。ハードコードしない */
     this._innertubeKey = '';
+    this._innertubeClientVersion = '';
+    this._visitorData = '';
+  }
+
+  _buildInnertubeClient() {
+    const client = {
+      clientName: 'WEB',
+      clientVersion: this._innertubeClientVersion || INNERTUBE_CLIENT_VERSION_FALLBACK,
+      hl: 'ja',
+      gl: 'JP',
+      userAgent: INNERTUBE_USER_AGENT,
+    };
+    if (this._visitorData) client.visitorData = this._visitorData;
+    return client;
   }
 
   _resolveStartMode() {
@@ -88,6 +133,8 @@ class YouTubeChatPoller {
     this.liveChatId = null;
     this.activeBackend = null;
     this._innertubeKey = '';
+    this._innertubeClientVersion = '';
+    this._visitorData = '';
 
     let mode;
     try {
@@ -133,6 +180,8 @@ class YouTubeChatPoller {
     this.running = false;
     this.activeBackend = null;
     this._innertubeKey = '';
+    this._innertubeClientVersion = '';
+    this._visitorData = '';
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -157,10 +206,33 @@ class YouTubeChatPoller {
 
     const html = await this._getText(`https://${INNERTUBE_HOST}/watch?v=${encodeURIComponent(videoId)}`);
     this._innertubeKey = extractInnertubeApiKeyFromHtml(html);
+    this._innertubeClientVersion = extractInnertubeClientVersionFromHtml(html)
+      || this._innertubeClientVersion
+      || INNERTUBE_CLIENT_VERSION_FALLBACK;
+    this._visitorData = extractVisitorDataFromHtml(html) || this._visitorData;
     if (!this._innertubeKey) {
       throw new Error('InnerTube API キーを動画ページから取得できませんでした');
     }
     return { key: this._innertubeKey, html };
+  }
+
+  /**
+   * liveChatRenderer の reloadContinuation を優先し、なければ長い continuation を使う。
+   * @param {object} initial
+   * @returns {string}
+   */
+  _pickLiveChatContinuation(initial) {
+    const liveChat = this._findAll(initial, 'liveChatRenderer')[0];
+    const reload = liveChat?.continuations?.[0]?.reloadContinuationData?.continuation;
+    if (typeof reload === 'string' && reload.length > 20) return reload;
+
+    const conts = this._findAll(initial, 'continuation');
+    let best = '';
+    for (const c of conts) {
+      const token = typeof c === 'string' ? c : c?.continuation;
+      if (typeof token === 'string' && token.length > best.length) best = token;
+    }
+    return best.length > 20 ? best : '';
   }
 
   async _fetchLiveChatContinuation() {
@@ -169,11 +241,8 @@ class YouTubeChatPoller {
     const initial = this._parseYtInitialData(html);
     if (!initial) throw new Error('動画ページの解析に失敗しました');
 
-    const conts = this._findAll(initial, 'continuation');
-    for (const c of conts) {
-      const token = typeof c === 'string' ? c : c?.continuation;
-      if (token && token.length > 20) return token;
-    }
+    const token = this._pickLiveChatContinuation(initial);
+    if (token) return token;
     throw new Error('ライブ配信中の動画ではありません（またはチャット continuation が見つかりません）');
   }
 
@@ -261,7 +330,14 @@ class YouTubeChatPoller {
         this.retryCount = 0;
       }
 
-      if (messages.length) this.onMessages(messages);
+      if (messages.length) {
+        try {
+          this.onMessages(messages);
+        } catch (handlerErr) {
+          // 取得自体は成功しているのでリトライ上限にカウントしない
+          console.error('[Poller] メッセージ処理エラー:', handlerErr?.message || handlerErr);
+        }
+      }
 
       this.timer = setTimeout(() => this._poll(), interval);
     } catch (err) {
@@ -288,7 +364,7 @@ class YouTubeChatPoller {
 
   async _pollInnerTube() {
     const body = {
-      context: { client: INNERTUBE_CLIENT },
+      context: { client: this._buildInnertubeClient() },
       continuation: this.continuation,
     };
     const data = await this._postInnerTube('/youtubei/v1/live_chat/get_live_chat', body);
@@ -426,7 +502,7 @@ class YouTubeChatPoller {
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(payload),
-          'User-Agent': INNERTUBE_CLIENT.userAgent,
+          'User-Agent': INNERTUBE_USER_AGENT,
           Origin: `https://${INNERTUBE_HOST}`,
         },
       }, (res) => {
@@ -465,7 +541,7 @@ class YouTubeChatPoller {
   _getText(url) {
     return new Promise((resolve, reject) => {
       const req = https.get(url, {
-        headers: { 'User-Agent': INNERTUBE_CLIENT.userAgent },
+        headers: { 'User-Agent': INNERTUBE_USER_AGENT },
       }, (res) => {
         if (res.statusCode !== 200) {
           res.resume();
@@ -487,3 +563,5 @@ module.exports = YouTubeChatPoller;
 module.exports.normalizeChatSource = normalizeChatSource;
 module.exports.CHAT_SOURCES = CHAT_SOURCES;
 module.exports.extractInnertubeApiKeyFromHtml = extractInnertubeApiKeyFromHtml;
+module.exports.extractInnertubeClientVersionFromHtml = extractInnertubeClientVersionFromHtml;
+module.exports.extractVisitorDataFromHtml = extractVisitorDataFromHtml;
